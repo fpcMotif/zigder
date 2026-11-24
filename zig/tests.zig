@@ -350,9 +350,30 @@ test "live_sync APFS firmlink canonicalization, fast dead-bit totals, and scoped
 
     var scanned = try walk.scan(gpa, root, &.{}, 2);
     defer scanned.deinit();
+    var l0: walk.Listing = .{ .id = 0 };
+    defer l0.deinit(gpa);
+    try l0.names.appendSlice(gpa, "tmp");
+    try l0.ents.append(gpa, .{ .name_off = 0, .name_len = 3, .kind = walk.KIND_DIR, .size = 0, .alloc = 0, .mtime = 0, .child = 1 });
+    const root_nm = std.fs.path.basename(root);
+    var l1: walk.Listing = .{ .id = 1 };
+    defer l1.deinit(gpa);
+    try l1.names.appendSlice(gpa, root_nm);
+    try l1.ents.append(gpa, .{ .name_off = 0, .name_len = @intCast(root_nm.len), .kind = walk.KIND_DIR, .size = 0, .alloc = 0, .mtime = 0, .child = 2 });
+    for (scanned.listings.items) |*l| {
+        l.id += 2;
+        for (l.ents.items) |*r| {
+            if (r.child != walk.NONE) r.child += 2;
+        }
+    }
+    var full_listings: std.ArrayList(walk.Listing) = .empty;
+    defer full_listings.deinit(gpa);
+    try full_listings.append(gpa, l0);
+    try full_listings.append(gpa, l1);
+    try full_listings.appendSlice(gpa, scanned.listings.items);
+
     var idx_buf: [128]u8 = undefined;
     const idx_path = try std.fmt.bufPrint(&idx_buf, "{s}/sync.zidx", .{root});
-    try index_build.buildFromListings(scanned.listings.items, 10, 1700000000, root, idx_path);
+    try index_build.buildFromListings(full_listings.items, 10, 1700000000, root, idx_path);
 
     var eng = try engine_mod.Engine.initHeadlessWithIndex(gpa, idx_path);
     defer eng.deinit();
