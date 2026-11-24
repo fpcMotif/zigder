@@ -68,7 +68,11 @@ fn buildBigListings(gpa: std.mem.Allocator) !std.ArrayList(walk.Listing) {
     try listings.append(gpa, .{ .id = 0 });
     for (0..BIG_PACKS) |p| try listings.append(gpa, .{ .id = @intCast(1 + p) });
     for (0..BIG_PACKS) |p| try listings.append(gpa, .{ .id = @intCast(1 + BIG_PACKS + p) });
-    var nb: [64]u8 = undefined;
+    const nm_id: u32 = @intCast(1 + 2 * BIG_PACKS);
+    const dot_id: u32 = nm_id + 1;
+    try listings.append(gpa, .{ .id = nm_id });
+    try listings.append(gpa, .{ .id = dot_id });
+    var nb: [128]u8 = undefined;
     for (0..BIG_PACKS) |p| {
         const pack_name = try std.fmt.bufPrint(&nb, "pack_{d:0>3}", .{p});
         try addEnt(gpa, &listings.items[0], pack_name, walk.KIND_DIR, 0, @intCast(1 + p));
@@ -95,6 +99,25 @@ fn buildBigListings(gpa: std.mem.Allocator) !std.ArrayList(walk.Listing) {
                 try std.fmt.bufPrint(&nb, "util_{d}.rs", .{j});
             try addEnt(gpa, src, name, walk.KIND_FILE, 7 * j, walk.NONE);
         }
+    }
+    try addEnt(gpa, &listings.items[1], "node_modules", walk.KIND_DIR, 0, nm_id);
+    try addEnt(gpa, &listings.items[nm_id], ".dot", walk.KIND_DIR, 0, dot_id);
+    const dot_dir = &listings.items[dot_id];
+    for (0..250) |j| {
+        const name = try std.fmt.bufPrint(
+            &nb,
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbqzx{d:0>3}.log",
+            .{j},
+        );
+        try addEnt(gpa, dot_dir, name, walk.KIND_FILE, 100 + j, walk.NONE);
+    }
+    for (0..30) |j| {
+        const name = try std.fmt.bufPrint(&nb, "bqbbzbbx_{d:0>2}.log", .{j});
+        try addEnt(gpa, dot_dir, name, walk.KIND_FILE, 50 + j, walk.NONE);
+    }
+    for (0..20) |j| {
+        const name = try std.fmt.bufPrint(&nb, "qzx_{d:0>2}.log", .{j});
+        try addEnt(gpa, &listings.items[1], name, walk.KIND_FILE, 20 + j, walk.NONE);
     }
     return listings;
 }
@@ -160,6 +183,13 @@ test "searcher matches brute-force oracle on an index above the selective thresh
         "pack src ma",
         "e x",
         "pack e size:<500",
+        "mai",
+        "main",
+        "rep",
+        "bet",
+        "in:/pack_007 mai",
+        "mai kind:file",
+        "qzx",
     };
     const now = query_mod.nowSecs();
     var bad: usize = 0;

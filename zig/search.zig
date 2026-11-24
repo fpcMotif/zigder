@@ -166,10 +166,12 @@ fn searchBase(
     var neg_dir_cache: std.AutoHashMapUnmanaged(u32, bool) = .empty;
     defer neg_dir_cache.deinit(gpa);
 
+    var floor_hint: i32 = std.math.minInt(i32);
     if (pos.len == 1 and pos[0].text.len >= 3) {
         const tok = pos[0];
         const done = try tryTrigramTier(gpa, live, q, tok, neg, &allow_ext, lo, hi, now, &neg_dir_cache, top);
         if (done) return 1;
+        if (top.full) floor_hint = top.floor_score;
         top.items.clearRetainingCapacity();
         top.floor = 0;
         top.floor_score = std.math.minInt(i32);
@@ -203,6 +205,7 @@ fn searchBase(
         now,
         &neg_dir_cache,
         top,
+        floor_hint,
     );
     return 2;
 }

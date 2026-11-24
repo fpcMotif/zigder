@@ -283,6 +283,7 @@ pub fn runBitmapTier(
     now: u32,
     neg_cache: *std.AutoHashMapUnmanaged(u32, bool),
     top: *TopK,
+    floor_hint: i32,
 ) !void {
     const idx = &live.base;
     if (pos.len == 0 and neg.len == 0 and q.exts.items.len == 0) {
@@ -296,7 +297,7 @@ pub fn runBitmapTier(
     }
 
     const seed_floor = if (pos.len == 1)
-        try computeSeedFloor(gpa, live, q, pos[0], neg, allow_ext, lo, hi, now, neg_cache)
+        @max(floor_hint, try computeSeedFloor(gpa, live, q, pos[0], neg, allow_ext, lo, hi, now, neg_cache))
     else
         std.math.minInt(i32);
 
