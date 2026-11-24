@@ -232,11 +232,12 @@ pub fn bottomBars(s: *AppState, c: *ui.Context, pal: Palette) void {
         defer pbar.end();
 
         const cur = s.currentPath();
+        var nav_target: ?[]const u8 = null;
         const root_btn = ui.div(c).row().px(4).py(2).rounded(4).hover(pal.row_hover).control();
         const rit = root_btn.interaction();
         ui.icon(c, theme.uiIconName("internaldrive"), .{ .size = 11, .color = pal.muted });
         root_btn.end();
-        if (rit.clicked) s.navigateTo("/", true) catch {};
+        if (rit.clicked) nav_target = "/";
 
         var acc_end: usize = 0;
         var iter = std.mem.tokenizeScalar(u8, cur, '/');
@@ -252,9 +253,10 @@ pub fn bottomBars(s: *AppState, c: *ui.Context, pal: Palette) void {
             ui.text(c, comp, .{ .size = 11.5, .color = if (acc_end == cur.len) pal.text else pal.muted });
             seg.end();
             if (sit.clicked and !std.mem.eql(u8, target_slice, cur)) {
-                s.navigateTo(target_slice, true) catch {};
+                nav_target = target_slice;
             }
         }
+        if (nav_target) |target| s.navigateTo(target, true) catch {};
     }
 
     if (s.show_status_bar) {

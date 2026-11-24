@@ -32,6 +32,8 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
         return;
     }
 
+    var activate_row: ?usize = null;
+    var commit_rename = false;
     var list = ui.list(c, .{ .count = rows_slice.len, .row_height = 26, .gap = 1, .padding = .xy(6, 4) });
     while (list.next()) |r| {
         const eid = rows_slice[r];
@@ -59,7 +61,7 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
                     .size = 13,
                     .select_all_on_focus = true,
                 });
-                if (rres.submitted) s.actionCommitRename();
+                if (rres.submitted) commit_rename = true;
             } else {
                 ui.text(c, nm, .{ .size = 13, .color = fg, .truncate = .ellipsis });
             }
@@ -95,13 +97,18 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
         }
 
         if (it.double_clicked) {
-            s.selectRow(r, false, false);
-            s.activateRow(r);
+            activate_row = r;
         } else if (it.clicked or it.right_clicked) {
             s.selectRow(r, c.input.cmd, c.input.shift);
         }
     }
     list.end();
+    if (commit_rename) {
+        s.actionCommitRename();
+    } else if (activate_row) |r| {
+        s.selectRow(r, false, false);
+        s.activateRow(r);
+    }
 }
 
 fn sortHead(

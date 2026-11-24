@@ -43,6 +43,7 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
 
     const strip = ui.div(c).column().wFull().h(154).bg(pal.bg).border(pal.divider).borderW(0.5);
     defer strip.end();
+    var activate_row: ?usize = null;
     var list = ui.list(c, .{ .count = rows_slice.len, .row_height = 28, .gap = 2, .padding = .xy(10, 6) });
     while (list.next()) |r| {
         const eid = rows_slice[r];
@@ -59,11 +60,14 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
         ui.spacer(c);
         ui.text(c, theme.fmtBytes(c, ent.size), .{ .size = 11.5, .color = if (sel) pal.accent_text else pal.muted, .tabular = true });
         if (it.double_clicked) {
-            s.selectRow(r, false, false);
-            s.activateRow(r);
+            activate_row = r;
         } else if (it.clicked) {
             s.selectRow(r, false, false);
         }
     }
     list.end();
+    if (activate_row) |r| {
+        s.selectRow(r, false, false);
+        s.activateRow(r);
+    }
 }

@@ -155,3 +155,103 @@ test "ui.Tester quiescence, views, sort, search, palette, folder undo, compact r
     try std.testing.expect(found_list);
     try std.testing.expect(found_insp);
 }
+
+fn findTextInBox(t: *ui.Tester, text: []const u8, min_y: f32, max_y: f32, max_x: f32) ?ui.Rect {
+    for (t.ctx.nodes.items) |n| switch (n.content) {
+        .text => |tx| if (std.mem.eql(u8, tx.str, text) and n.rect.x < max_x and n.rect.y >= min_y and n.rect.y <= max_y) return n.rect,
+        .icon, .image, .texture, .hole, .canvas, .none => {},
+    };
+    return null;
+}
+
+fn doubleClickRect(t: *ui.Tester, r: ui.Rect) void {
+    t.doubleClick(r.x + r.w / 2, r.y + r.h / 2);
+    t.frame();
+}
+
+test "ui.Tester double-click enters folder in list, icon, gallery, inline rename, and path bar breadcrumb" {
+    const gpa = std.testing.allocator;
+    var tmp: [64:0]u8 = @splat(0);
+    const tmpl = "/tmp/zigder-uifx-XXXXXX";
+    @memcpy(tmp[0..tmpl.len], tmpl);
+    _ = mkdtemp(&tmp) orelse return error.TmpDir;
+    const root = tmp[0..tmpl.len :0];
+    defer {
+        var cmd: [128]u8 = undefined;
+        const s = std.fmt.bufPrintSentinel(&cmd, "rm -rf '{s}'", .{root}, 0) catch unreachable;
+        _ = system(s);
+    }
+
+    var cmd_buf: [640]u8 = undefined;
+    const setup = try std.fmt.bufPrintSentinel(
+        &cmd_buf,
+        "mkdir -p '{s}/docs/sub' && printf '# guide' > '{s}/docs/guide.md' && printf 'leaf' > '{s}/docs/sub/leaf.txt' && printf 'pub fn main() void {{}}' > '{s}/alpha.zig' && printf 'fn main() {{}}' > '{s}/beta.rs' && printf 'hello' > '{s}/gamma.txt' && printf 'png' > '{s}/image.png'",
+        .{ root, root, root, root, root, root, root },
+        0,
+    );
+    try std.testing.expectEqual(@as(c_int, 0), system(setup));
+
+    var idx_buf: [128]u8 = undefined;
+    const idx_path = try std.fmt.bufPrint(&idx_buf, "{s}/ui.zidx", .{root});
+    {
+        var scanned = try walk.scan(gpa, root, &.{}, 2);
+        defer scanned.deinit();
+        try index_build.buildFromListings(scanned.listings.items, 1, 1700000000, root, idx_path);
+    }
+
+    var engine = try engine_mod.Engine.initHeadlessWithIndex(gpa, idx_path);
+    defer engine.deinit();
+
+    var state = try app_mod.AppState.init(gpa, &engine, root, root, true);
+    defer state.deinit();
+
+    var t: ui.Tester = undefined;
+    try t.init(gpa, .init(&state, view_mod.view), .{ .width = 1220, .height = 780 });
+    defer t.deinit();
+    t.settle(0.5);
+
+    const list_docs = findTextInBox(&t, "docs", 60, 700, 950) orelse return error.TextNotFound;
+    doubleClickRect(&t, list_docs);
+    try std.testing.expect(std.mem.endsWith(u8, state.currentPath(), "/docs"));
+    try std.testing.expect(t.hasText("guide.md"));
+    state.goBack();
+    t.frame();
+
+    try std.testing.expect(t.shortcut(.{ .key = '1', .cmd = true }));
+    t.settle(0.2);
+    const icon_docs = findTextInBox(&t, "docs", 60, 700, 950) orelse return error.TextNotFound;
+    doubleClickRect(&t, icon_docs);
+    try std.testing.expect(std.mem.endsWith(u8, state.currentPath(), "/docs"));
+    try std.testing.expect(t.hasText("guide.md"));
+    state.goBack();
+    t.frame();
+
+    try std.testing.expect(t.shortcut(.{ .key = '4', .cmd = true }));
+    t.settle(0.2);
+    const gallery_docs = findTextInBox(&t, "docs", 560, 730, 950) orelse return error.TextNotFound;
+    doubleClickRect(&t, gallery_docs);
+    try std.testing.expect(std.mem.endsWith(u8, state.currentPath(), "/docs"));
+    try std.testing.expect(t.hasText("guide.md"));
+
+    var sub_buf: [256]u8 = undefined;
+    const sub_path = try std.fmt.bufPrint(&sub_buf, "{s}/docs/sub", .{root});
+    try state.navigateTo(sub_path, true);
+    t.frame();
+    const crumb_docs = findTextInBox(&t, "docs", 720, 760, 950) orelse return error.TextNotFound;
+    t.click(crumb_docs.x + crumb_docs.w / 2, crumb_docs.y + crumb_docs.h / 2);
+    t.frame();
+    try std.testing.expect(std.mem.endsWith(u8, state.currentPath(), "/docs"));
+    try std.testing.expect(t.hasText("guide.md"));
+
+    try state.navigateTo(root, true);
+    try std.testing.expect(t.shortcut(.{ .key = '2', .cmd = true }));
+    t.settle(0.2);
+    state.selectRow(1, false, false);
+    state.actionBeginRename();
+    state.rename_buf.set("alpha2.zig");
+    t.frame();
+    t.key(.enter);
+    t.frame();
+    try std.testing.expect(t.hasText("alpha2.zig"));
+    try std.testing.expect(!t.hasText("alpha.zig"));
+}

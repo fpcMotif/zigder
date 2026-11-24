@@ -26,6 +26,7 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
     const cols: usize = @max(@as(usize, 1), @as(usize, @intFromFloat(@floor(@max(tile_w, est_w - 24) / (tile_w + 10)))));
     const grid_rows = std.math.divCeil(usize, rows_slice.len, cols) catch 0;
 
+    var activate_row: ?usize = null;
     var list = ui.list(c, .{ .count = grid_rows, .row_height = tile_h, .gap = 10, .padding = .xy(12, 12) });
     while (list.next()) |gr| {
         const row_box = ui.div(c).row().wFull().h(tile_h).gap(10).itemsStart();
@@ -58,12 +59,15 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
             });
 
             if (it.double_clicked) {
-                s.selectRow(idx, false, false);
-                s.activateRow(idx);
+                activate_row = idx;
             } else if (it.clicked) {
                 s.selectRow(idx, c.input.cmd, c.input.shift);
             }
         }
     }
     list.end();
+    if (activate_row) |idx| {
+        s.selectRow(idx, false, false);
+        s.activateRow(idx);
+    }
 }
