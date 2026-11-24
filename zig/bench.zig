@@ -410,6 +410,42 @@ pub fn main() !void {
         });
     }
 
+    const app_queries = [_][]const u8{
+        "zigder",
+        "nan",
+        "nano",
+        "con",
+        "e",
+        "src main",
+        "zig build",
+        "config json",
+        "test spec ts",
+        "in:~/devv src main",
+        "in:~/devv/zigder e",
+        "ext:json",
+        "kind:dir",
+    };
+    pOut(gpa, "\n{s:<22} | {s:>4} | {s:>4} | {s:>10} | {s:>10}\n", .{
+        "app query (limit 200)", "hits", "tier", "p50_us", "p95_us",
+    });
+    for (app_queries) |qstr| {
+        var aq = try query_mod.Query.parse(gpa, qstr, home);
+        defer aq.deinit(gpa);
+        aq.limit = 200;
+        for (0..2) |_| try search_mod.search(gpa, live_ref, &aq, null, &z_res);
+        var a_samples: [11]f64 = undefined;
+        for (&a_samples) |*slot| {
+            const ts = measure.nanos();
+            try search_mod.search(gpa, live_ref, &aq, null, &z_res);
+            slot.* = @as(f64, @floatFromInt(measure.nanos() - ts)) / 1000.0;
+        }
+        const a_stats = measure.Stats.of(&a_samples);
+        pOut(gpa, "{s:<22} | {d:>4} | T{d:>3} | {d:>10.1} | {d:>10.1}\n", .{
+            qstr, z_res.hits.items.len, z_res.tier_used, a_stats.p50, a_stats.p95,
+        });
+    }
+    pOut(gpa, "after_search_mb={d:.2}\n", .{restedFootprintMb(&tester.renderer)});
+
     const sub_p50_us = @max(
         qrows[2].zigder_p50_us,
         @max(qrows[3].zigder_p50_us, @max(qrows[4].zigder_p50_us, @max(qrows[5].zigder_p50_us, qrows[6].zigder_p50_us))),
