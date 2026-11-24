@@ -26,6 +26,14 @@ jobs:
       - run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
       - run: ./scripts/surface.sh
 
+  zig-check:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: mise exec -- zig build check --summary all
+      - run: mise exec -- zig build --summary all
+
   release:
     needs: check
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'

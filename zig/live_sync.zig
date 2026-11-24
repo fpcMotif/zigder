@@ -43,12 +43,21 @@ pub fn resolveSyncDir(
     skip_paths: []const []const u8,
 ) ?[]const u8 {
     if (walk.isBlocked(canonical_path, skip_paths)) return null;
-    var cur = canonical_path;
-    while (true) {
-        if (!walk.isBlocked(cur, skip_paths) and lv.hasDir(cur)) return cur;
-        if (std.mem.eql(u8, cur, "/")) return null;
-        cur = std.fs.path.dirname(cur) orelse "/";
+    if (lv.hasDir(canonical_path)) return canonical_path;
+    if (std.mem.eql(u8, canonical_path, "/")) return null;
+    const parent = std.fs.path.dirname(canonical_path) orelse "/";
+    if (std.mem.eql(u8, parent, "/")) {
+        return if (!walk.isBlocked("/", skip_paths) and lv.hasDir("/")) "/" else null;
     }
+    var cur = parent;
+    var steps: usize = 0;
+    while (steps < 2) : (steps += 1) {
+        if (!walk.isBlocked(cur, skip_paths) and lv.hasDir(cur)) return cur;
+        const next_parent = std.fs.path.dirname(cur) orelse "/";
+        if (std.mem.eql(u8, next_parent, "/")) break;
+        cur = next_parent;
+    }
+    return null;
 }
 
 pub const FetchedTarget = struct {

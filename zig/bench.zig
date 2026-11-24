@@ -319,11 +319,11 @@ pub fn main() !void {
         defer q.deinit(gpa);
         q.limit = 50;
 
-        for (0..3) |_| try search_mod.search(gpa, live_ref, &q, null, &z_res);
+        for (0..3) |_| try search_mod.search(gpa, live_ref, &q, &z_res);
         var z_samples: [25]f64 = undefined;
         for (&z_samples) |*slot| {
             const ts = measure.nanos();
-            try search_mod.search(gpa, live_ref, &q, null, &z_res);
+            try search_mod.search(gpa, live_ref, &q, &z_res);
             slot.* = @as(f64, @floatFromInt(measure.nanos() - ts)) / 1000.0;
         }
         const z_stats = measure.Stats.of(&z_samples);
@@ -354,8 +354,6 @@ pub fn main() !void {
         };
     }
 
-    var cache: search_mod.SearchCache = .{};
-    defer cache.deinit(gpa);
     const keystrokes = [_][]const u8{ "z", "zi", "zig", "zigd", "zigde", "zigder" };
     var ks_samples: [keystrokes.len]f64 = undefined;
     for (keystrokes, 0..) |ks, ki| {
@@ -363,7 +361,7 @@ pub fn main() !void {
         defer kq.deinit(gpa);
         kq.limit = 50;
         const ts = measure.nanos();
-        try search_mod.search(gpa, live_ref, &kq, &cache, &z_res);
+        try search_mod.search(gpa, live_ref, &kq, &z_res);
         ks_samples[ki] = @as(f64, @floatFromInt(measure.nanos() - ts)) / 1000.0;
     }
     const keystroke_last_us = ks_samples[ks_samples.len - 1];
@@ -398,7 +396,7 @@ pub fn main() !void {
     pOut(gpa, "index_load_ms={d:.2} convert_ms={d:.1} index_dirty_mb={d:.2} active_gpu_mb={d:.2} idle_mb={d:.2} list_10k_mb={d:.2}\n", .{
         index_load_ms, convert_ms, index_dirty_mb, active_gpu_mb, idle_mb, list_10k_mb,
     });
-    pOut(gpa, "scroll_p50_ms={d:.3} view_switch_p50_ms={d:.3} keystroke_cached_us={d:.2} totals_us={d:.2} home_load_ms={d:.3} (has_devv={}) leaks={d:.0}\n\n", .{
+    pOut(gpa, "scroll_p50_ms={d:.3} view_switch_p50_ms={d:.3} keystroke_us={d:.2} totals_us={d:.2} home_load_ms={d:.3} (has_devv={}) leaks={d:.0}\n\n", .{
         scroll_stats.p50, switch_stats.p50, keystroke_last_us, totals_us, home_load_stats.p50, devv_tot != null, leaks,
     });
     pOut(gpa, "{s:<18} | {s:>4} | {s:>4} | {s:>10} | {s:>10} | {s:>10} | {s:>8}\n", .{
@@ -409,6 +407,42 @@ pub fn main() !void {
             row.query, row.hits, row.tier, row.zigder_p50_us, row.zigder_p95_us, row.founder_p50_us, row.speedup,
         });
     }
+
+    const app_queries = [_][]const u8{
+        "zigder",
+        "nan",
+        "nano",
+        "con",
+        "e",
+        "src main",
+        "zig build",
+        "config json",
+        "test spec ts",
+        "in:~/devv src main",
+        "in:~/devv/zigder e",
+        "ext:json",
+        "kind:dir",
+    };
+    pOut(gpa, "\n{s:<22} | {s:>4} | {s:>4} | {s:>10} | {s:>10}\n", .{
+        "app query (limit 200)", "hits", "tier", "p50_us", "p95_us",
+    });
+    for (app_queries) |qstr| {
+        var aq = try query_mod.Query.parse(gpa, qstr, home);
+        defer aq.deinit(gpa);
+        aq.limit = 200;
+        for (0..2) |_| try search_mod.search(gpa, live_ref, &aq, &z_res);
+        var a_samples: [11]f64 = undefined;
+        for (&a_samples) |*slot| {
+            const ts = measure.nanos();
+            try search_mod.search(gpa, live_ref, &aq, &z_res);
+            slot.* = @as(f64, @floatFromInt(measure.nanos() - ts)) / 1000.0;
+        }
+        const a_stats = measure.Stats.of(&a_samples);
+        pOut(gpa, "{s:<22} | {d:>4} | T{d:>3} | {d:>10.1} | {d:>10.1}\n", .{
+            qstr, z_res.hits.items.len, z_res.tier_used, a_stats.p50, a_stats.p95,
+        });
+    }
+    pOut(gpa, "after_search_mb={d:.2}\n", .{restedFootprintMb(&tester.renderer)});
 
     const sub_p50_us = @max(
         qrows[2].zigder_p50_us,

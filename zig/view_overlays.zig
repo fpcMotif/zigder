@@ -73,6 +73,7 @@ fn renderPalette(s: *AppState, c: *ui.Context, pal: Palette) void {
 
     ui.textf(c, .{ .size = 11, .color = pal.subtle, .tabular = true }, "{d} matches in {d} us", .{ hits.len, s.modal_results.elapsed_us });
     const list_h: f32 = @min(300, @as(f32, @floatFromInt(hits.len)) * 34 + 8);
+    var pick_hit: ?usize = null;
     var list = ui.list(c, .{ .count = hits.len, .row_height = 32, .gap = 2, .height = .{ .px = list_h } });
     while (list.next()) |i| {
         const hit = hits[i];
@@ -93,11 +94,14 @@ fn renderPalette(s: *AppState, c: *ui.Context, pal: Palette) void {
             ui.text(c, dir, .{ .size = 10.5, .color = if (sel) pal.accent_text.alpha(0.85) else pal.muted, .truncate = .middle });
         }
         if (it.clicked) {
-            s.modal_cursor = i;
-            s.commitModalGoOrSearch();
+            pick_hit = i;
         }
     }
     list.end();
+    if (pick_hit) |i| {
+        s.modal_cursor = i;
+        s.commitModalGoOrSearch();
+    }
 }
 
 fn renderNewFolder(s: *AppState, c: *ui.Context, pal: Palette) void {

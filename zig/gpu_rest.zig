@@ -53,7 +53,6 @@ pub const IdleRest = struct {
         if (comptime nanoui.ui.portable) return;
         const surf = win.surface orelse return;
         self.surface = surf;
-        nanoui.objc.msg(void, surf.renderer.layer, "setMaximumDrawableCount:", .{@as(nanoui.objc.NSUInteger, 2)});
         surf.after_frame_ctx = self;
         surf.after_frame = onAfterFrame;
         self.last_frame_ns = measure.nanos();

@@ -228,7 +228,7 @@ pub fn main(init: std.process.Init) !void {
         }
         var res: search_mod.SearchResults = .{};
         defer res.deinit(gpa);
-        try search_mod.search(gpa, &live, &q, null, &res);
+        try search_mod.search(gpa, &live, &q, &res);
         if (json) {
             printOut(gpa, "{{\"elapsed_us\":{d},\"tier\":{d},\"hits\":[", .{ res.elapsed_us, res.tier_used });
             for (res.hits.items, 0..) |h, hi| {

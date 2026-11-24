@@ -113,7 +113,6 @@ pub const AppState = struct {
     search_scope: SearchScope = .disk,
     last_query: std.ArrayList(u8) = .empty,
     last_modal_query: std.ArrayList(u8) = .empty,
-    search_cache: search_mod.SearchCache = .{},
     search_results: search_mod.SearchResults = .{},
     modal_results: search_mod.SearchResults = .{},
     modal_cursor: usize = 0,
@@ -160,7 +159,6 @@ pub const AppState = struct {
         s.rename_buf.deinit();
         s.last_query.deinit(s.gpa);
         s.last_modal_query.deinit(s.gpa);
-        s.search_cache.deinit(s.gpa);
         s.search_results.deinit(s.gpa);
         s.modal_results.deinit(s.gpa);
         s.inspector_path.deinit(s.gpa);
@@ -434,7 +432,7 @@ pub const AppState = struct {
             return;
         }
         const scope: ?[]const u8 = if (s.search_scope == .folder) s.currentPath() else null;
-        s.engine.runSearch(s.gpa, s.home, txt, scope, 200, &s.search_cache, &s.search_results) catch {};
+        s.engine.runSearch(s.gpa, s.home, txt, scope, 200, &s.search_results) catch {};
         s.search_cursor = 0;
         s.refreshInspector();
         app_sel.syncWatch(s);
@@ -486,7 +484,7 @@ pub const AppState = struct {
             s.modal_results.clear();
             return;
         }
-        s.engine.runSearch(s.gpa, s.home, txt, null, 25, null, &s.modal_results) catch {};
+        s.engine.runSearch(s.gpa, s.home, txt, null, 25, &s.modal_results) catch {};
         s.modal_cursor = 0;
     }
 

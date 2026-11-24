@@ -410,21 +410,21 @@ test "state: a root rescan event and a dropped-event flag rebuild the index" {
     var res: search_mod.SearchResults = .{};
     defer res.deinit(gpa);
     try sh("printf z > '{s}/latecomer.bin'", .{env.root()});
-    try engine.runSearch(gpa, env.root(), "latecomer", null, 10, null, &res);
+    try engine.runSearch(gpa, env.root(), "latecomer", null, 10, &res);
     try std.testing.expectEqual(@as(usize, 0), res.hits.items.len);
 
     var root_path = [_]u8{'/'};
     engine.applyEvents(&.{.{ .path = &root_path, .flags = fsevents.MUST_SCAN_SUBDIRS, .id = 2, .stream = 1 }});
     engine.waitIdle();
     try std.testing.expect(!engine.indexing.load(.acquire));
-    try engine.runSearch(gpa, env.root(), "latecomer", null, 10, null, &res);
+    try engine.runSearch(gpa, env.root(), "latecomer", null, 10, &res);
     try std.testing.expectEqual(@as(usize, 1), res.hits.items.len);
 
     try sh("printf z > '{s}/afterdrop.bin'", .{env.root()});
     var docs_path = [_]u8{ '/', 'd', 'o', 'c', 's' };
     engine.applyEvents(&.{.{ .path = &docs_path, .flags = fsevents.KERNEL_DROPPED, .id = 3, .stream = 1 }});
     engine.waitIdle();
-    try engine.runSearch(gpa, env.root(), "afterdrop", null, 10, null, &res);
+    try engine.runSearch(gpa, env.root(), "afterdrop", null, 10, &res);
     try std.testing.expectEqual(@as(usize, 1), res.hits.items.len);
 }
 
