@@ -8,9 +8,17 @@ conditions, and update your row when done.
 
 Update: the Zig port entered git in commit `c78fdf0`, after these plans were
 written. Where a plan says "`zig/` is untracked" or "do not commit", the
-operator now decides. The file hashes in each drift check describe the tree
-at `c78fdf0`, so `git diff --stat c78fdf0..HEAD -- <in-scope paths>` is an
-equal drift check.
+operator now decides.
+
+Another session edited some files between planning and that commit. At
+`c78fdf0` the plan hashes still match `zig/search.zig`,
+`zig/search_bitmap.zig`, `zig/search_nfa.zig`, and `zig/cli.zig`. They no
+longer match `build.zig`, `zig/tests.zig`, `zig/bench.zig`, `zig/app.zig`,
+and `zig/engine.zig`. In those files the quoted code still exists, but the
+line numbers moved by 1 to 31 lines (for example `runSearch` is at
+`zig/engine.zig:228`, the app call is at `zig/app.zig:437`). Match the
+excerpts by text, not by line number. For those five files, a hash mismatch
+alone is not a STOP condition.
 
 Goal of this set: faster search and lower memory in the Zig port, with
 results equal to the reference search.
@@ -22,7 +30,7 @@ Run each plan's drift check first.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001 | `zig build lines` and `zig build bench` configure from a clean cache | P1 | S | none | TODO |
+| 001 | `zig build lines` and `zig build bench` configure from a clean cache | P1 | S | none | REJECTED (fixed independently: `build.zig` at `c78fdf0` uses `.fast` and `.debug`, and `zig build -l` lists `bench` and `lines`) |
 | 002 | Large-index oracle test, and scoped one-word search ranks by name again | P1 | S | 001 | TODO |
 | 003 | The bench reports search the way the app runs it | P1 | S | 001 | TODO |
 | 004 | Inline search no longer uses `SearchCache` | P1 | M | 002, 003 | TODO |
