@@ -7,6 +7,7 @@ const query_mod = @import("query.zig");
 const live_mod = @import("live.zig");
 const baseline = @import("search_baseline.zig");
 const search_nfa = @import("search_nfa.zig");
+const search_memo = @import("search_memo.zig");
 
 pub const TopEntry = struct {
     key: u64,
@@ -341,6 +342,11 @@ pub fn runBitmapTier(
         return;
     }
 
+    if (pos.len >= 2 and q.exts.items.len == 0 and ok_entries > search_memo.MEMO_MIN_ENTRIES) {
+        try search_memo.scoreMultiToken(gpa, live, q, pos, neg, lo, hi, now, neg_cache, matched_names.items, ok_entries, top);
+        return;
+    }
+
     const name_lookup = try gpa.alloc(i32, idx.u);
     defer gpa.free(name_lookup);
     @memset(name_lookup, std.math.minInt(i32));
@@ -407,7 +413,7 @@ pub fn runBitmapTier(
     }
 }
 
-inline fn zoneOk(z: *const fmt.Zone, q: *const query_mod.Query) bool {
+pub inline fn zoneOk(z: *const fmt.Zone, q: *const query_mod.Query) bool {
     if (z.max_size < q.size_min or z.max_mtime < q.mtime_min or z.min_mtime > q.mtime_max) return false;
     if (q.kind) |want| {
         const kbit = @as(u32, 1) << @intCast(want);
