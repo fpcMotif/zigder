@@ -5,6 +5,7 @@ const kit = nanoui.kit;
 const app_mod = @import("app.zig");
 const AppState = app_mod.AppState;
 const theme = @import("theme.zig");
+const file_icons = @import("file_icons.zig");
 const Palette = theme.Palette;
 
 pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
@@ -75,6 +76,7 @@ fn renderPalette(s: *AppState, c: *ui.Context, pal: Palette) void {
     const list_h: f32 = @min(300, @as(f32, @floatFromInt(hits.len)) * 34 + 8);
     var pick_hit: ?usize = null;
     var list = ui.list(c, .{ .count = hits.len, .row_height = 32, .gap = 2, .height = .{ .px = list_h } });
+    theme.listScrollbar(c, pal);
     while (list.next()) |i| {
         const hit = hits[i];
         const path = s.modal_results.pathOf(hit);
@@ -86,7 +88,7 @@ fn renderPalette(s: *AppState, c: *ui.Context, pal: Palette) void {
         const row = ui.div(c).row().wFull().h(32).px(8).gap(8).itemsCenter().rounded(6).bg(if (sel) pal.row_sel else pal.bg).hover(if (sel) pal.row_sel else pal.row_hover).control();
         const it = row.interaction();
         defer row.end();
-        ui.icon(c, ic.name, .{ .size = 14, .color = if (sel) pal.accent_text else ic.color });
+        file_icons.path(c, path, hit.kind, 16, ic, if (sel) pal.accent_text else null);
         {
             const text_col = ui.div(c).column().grow().gap(1).clip();
             defer text_col.end();

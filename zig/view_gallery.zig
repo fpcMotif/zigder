@@ -5,6 +5,7 @@ const app_mod = @import("app.zig");
 const AppState = app_mod.AppState;
 const theme = @import("theme.zig");
 const Palette = theme.Palette;
+const file_icons = @import("file_icons.zig");
 
 pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
     const outer = ui.div(c).column().sizeFull().bg(pal.bg);
@@ -24,7 +25,7 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
         if (s.entryAtRow(s.tab().cursor)) |cur| {
             const nm = s.listing.nameOf(cur.entry);
             const ic = theme.iconForEntry(&s.listing, cur.entry, pal);
-            ui.icon(c, ic.name, .{ .size = 64, .color = ic.color });
+            file_icons.entry(c, &s.listing, cur.entry, 64, ic, null);
             ui.text(c, nm, .{ .size = 18, .weight = .semibold, .color = pal.text, .truncate = .ellipsis });
             ui.textf(c, .{ .size = 13, .color = pal.muted, .tabular = true }, "{s} · {s} · Modified {s}", .{
                 theme.kindLabel(&s.listing, cur.entry),
@@ -45,6 +46,7 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
     defer strip.end();
     var activate_row: ?usize = null;
     var list = ui.list(c, .{ .count = rows_slice.len, .row_height = 28, .gap = 2, .padding = .xy(10, 6) });
+    theme.listScrollbar(c, pal);
     while (list.next()) |r| {
         const eid = rows_slice[r];
         const ent = s.listing.entries.items[eid];
@@ -55,7 +57,7 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
         const it = row.interaction();
         theme.describeNode(c, row.index, .row, nm, "", sel, true);
         defer row.end();
-        ui.icon(c, ic.name, .{ .size = 15, .color = if (sel) pal.accent_text else ic.color, .frame = 18 });
+        file_icons.entry(c, &s.listing, ent, 16, ic, if (sel) pal.accent_text else null);
         ui.text(c, nm, .{ .size = 13, .color = if (sel) pal.accent_text else pal.text, .truncate = .ellipsis });
         ui.spacer(c);
         ui.text(c, theme.fmtBytes(c, ent.size), .{ .size = 11.5, .color = if (sel) pal.accent_text else pal.muted, .tabular = true });

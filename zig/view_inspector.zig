@@ -6,9 +6,10 @@ const AppState = app_mod.AppState;
 const theme = @import("theme.zig");
 const Palette = theme.Palette;
 const volumes = @import("volumes.zig");
+const file_icons = @import("file_icons.zig");
 
 pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
-    const pane = ui.div(c).column().w(260).hFull().p(14).gap(12).bg(pal.surface).border(pal.divider).borderW(0.5).scrollY();
+    const pane = ui.div(c).column().w(288).hFull().p(theme.metric.pane_inset).gap(12).bg(pal.surface).border(pal.divider).borderW(0.5).scrollY().scrollbar(theme.scrollbar(pal));
     defer pane.end();
 
     if (!s.inspector.valid) {
@@ -24,9 +25,9 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
     {
         const hero = ui.div(c).column().wFull().py(10).gap(6).center().rounded(10).bg(pal.bg).border(pal.divider).borderW(0.5);
         defer hero.end();
-        ui.icon(c, ic.name, .{ .size = 42, .color = ic.color });
-        ui.text(c, base, .{ .size = 14, .weight = .semibold, .color = pal.text, .truncate = .ellipsis });
-        ui.text(c, s.inspector.kindText(), .{ .size = 12, .color = pal.muted });
+        file_icons.path(c, full_path, kind_byte, 64, ic, null);
+        ui.text(c, base, .{ .size = theme.size.title, .weight = .semibold, .color = pal.text, .truncate = .middle });
+        ui.text(c, s.inspector.kindText(), .{ .size = theme.size.body, .color = pal.muted });
     }
 
     {
@@ -83,6 +84,6 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
 fn metaRow(c: *ui.Context, pal: Palette, key: []const u8, val: []const u8) void {
     const r = ui.div(c).row().wFull().justifyBetween().itemsCenter().gap(8);
     defer r.end();
-    ui.text(c, key, .{ .size = 12, .color = pal.muted });
-    ui.text(c, val, .{ .size = 12, .color = pal.text, .tabular = true, .truncate = .ellipsis });
+    ui.text(c, key, .{ .size = theme.size.caption, .color = pal.muted });
+    ui.text(c, val, .{ .size = theme.size.caption, .color = pal.text, .tabular = true, .truncate = .ellipsis });
 }

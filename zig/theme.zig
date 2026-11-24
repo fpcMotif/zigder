@@ -5,6 +5,34 @@ const fs_entry = @import("fs_entry.zig");
 const volumes = @import("volumes.zig");
 const walk = @import("walk.zig");
 
+const SystemAccent = struct { accent: ui.Color, selection: ui.Color };
+var system_accent: ?SystemAccent = null;
+
+fn systemColor(comptime selector: [:0]const u8) ?ui.Color {
+    if (comptime ui.portable) return null;
+    const objc = nanoui.objc;
+    const pool = objc.Pool.push();
+    defer pool.pop();
+    const raw = objc.msg(?objc.Object, objc.class("NSColor"), selector, .{}) orelse return null;
+    const space = objc.msg(?objc.Object, objc.class("NSColorSpace"), "sRGBColorSpace", .{}) orelse return null;
+    const rgb = objc.msg(?objc.Object, raw, "colorUsingColorSpace:", .{space}) orelse return null;
+    return .{
+        .r = @floatCast(objc.msg(f64, rgb, "redComponent", .{})),
+        .g = @floatCast(objc.msg(f64, rgb, "greenComponent", .{})),
+        .b = @floatCast(objc.msg(f64, rgb, "blueComponent", .{})),
+    };
+}
+
+fn systemAccent() SystemAccent {
+    if (system_accent) |cached| return cached;
+    const found: SystemAccent = .{
+        .accent = systemColor("controlAccentColor") orelse ui.Color.hex(0x0088FF),
+        .selection = systemColor("selectedContentBackgroundColor") orelse ui.Color.hex(0x0063E1),
+    };
+    system_accent = found;
+    return found;
+}
+
 pub const Palette = struct {
     dark: bool,
     bg: ui.Color,
@@ -29,27 +57,28 @@ pub const Palette = struct {
     success: ui.Color,
 
     pub fn from(c: *const ui.Context) Palette {
+        const sys = systemAccent();
         if (c.theme.dark) {
             return .{
                 .dark = true,
-                .bg = ui.Color.hex(0x16171A),
-                .surface = ui.Color.hex(0x1E2024),
-                .chrome = ui.Color.hex(0x23252A),
-                .row_alt = ui.Color.hex(0x1B1C20),
-                .row_hover = ui.Color.hex(0x292C33),
-                .row_sel = ui.Color.hex(0x1957B8),
-                .row_sel_muted = ui.Color.hex(0x2D3139),
-                .border = ui.Color.hex(0x363941),
-                .divider = ui.Color.hex(0x2A2D34),
-                .text = ui.Color.hex(0xF3F4F6),
-                .muted = ui.Color.hex(0x9BA1AB),
-                .subtle = ui.Color.hex(0x6E7480),
-                .accent = ui.Color.hex(0x2E8BFF),
+                .bg = ui.Color.hex(0x1E1E1E),
+                .surface = ui.Color.hex(0x262626),
+                .chrome = ui.Color.hex(0x2A2A2A),
+                .row_alt = ui.Color.hex(0x292929),
+                .row_hover = ui.Color.hex(0x303030),
+                .row_sel = sys.selection.mix(ui.Color.black, 0.07),
+                .row_sel_muted = ui.Color.hex(0x464646),
+                .border = ui.Color.hex(0x3D3D3D),
+                .divider = ui.Color.hex(0x393939),
+                .text = ui.Color.hex(0xDDDDDD),
+                .muted = ui.Color.hex(0x999999),
+                .subtle = ui.Color.hex(0x6E6E6E),
+                .accent = sys.accent,
                 .accent_text = ui.Color.white,
-                .folder = ui.Color.hex(0x47A3FF),
+                .folder = sys.accent,
                 .code = ui.Color.hex(0x64D2FF),
-                .badge_bg = ui.Color.hex(0x2B2F37),
-                .code_bg = ui.Color.hex(0x121316),
+                .badge_bg = ui.Color.hex(0x363636),
+                .code_bg = ui.Color.hex(0x171717),
                 .danger = ui.Color.hex(0xFF453A),
                 .success = ui.Color.hex(0x30D158),
             };
@@ -57,33 +86,60 @@ pub const Palette = struct {
         return .{
             .dark = false,
             .bg = ui.Color.hex(0xFFFFFF),
-            .surface = ui.Color.hex(0xF6F7F9),
-            .chrome = ui.Color.hex(0xF2F3F6),
-            .row_alt = ui.Color.hex(0xF9FAFB),
-            .row_hover = ui.Color.hex(0xECEEF3),
-            .row_sel = ui.Color.hex(0x0A84FF),
-            .row_sel_muted = ui.Color.hex(0xE2E5EC),
-            .border = ui.Color.hex(0xD8DCE3),
-            .divider = ui.Color.hex(0xE6E9EF),
-            .text = ui.Color.hex(0x1C1E22),
-            .muted = ui.Color.hex(0x5F6570),
-            .subtle = ui.Color.hex(0x888E99),
-            .accent = ui.Color.hex(0x0A84FF),
+            .surface = ui.Color.hex(0xF5F5F5),
+            .chrome = ui.Color.hex(0xF6F6F6),
+            .row_alt = ui.Color.hex(0xF4F5F5),
+            .row_hover = ui.Color.hex(0xECECEC),
+            .row_sel = sys.selection,
+            .row_sel_muted = ui.Color.hex(0xDCDCDC),
+            .border = ui.Color.hex(0xD9D9D9),
+            .divider = ui.Color.hex(0xE5E5E5),
+            .text = ui.Color.hex(0x262626),
+            .muted = ui.Color.hex(0x808080),
+            .subtle = ui.Color.hex(0x8E8E8E),
+            .accent = sys.accent,
             .accent_text = ui.Color.white,
-            .folder = ui.Color.hex(0x2B95FF),
+            .folder = sys.accent,
             .code = ui.Color.hex(0x0070C9),
-            .badge_bg = ui.Color.hex(0xE9ECF2),
-            .code_bg = ui.Color.hex(0xF4F5F8),
+            .badge_bg = ui.Color.hex(0xE8E8E8),
+            .code_bg = ui.Color.hex(0xF5F5F5),
             .danger = ui.Color.hex(0xFF3B30),
             .success = ui.Color.hex(0x28CD41),
         };
     }
 };
 
+pub const size = struct {
+    pub const title: f32 = 15;
+    pub const body: f32 = 13;
+    pub const callout: f32 = 12;
+    pub const caption: f32 = 11;
+};
+
+pub const metric = struct {
+    pub const toolbar_h: f32 = 52;
+    pub const row_h: f32 = 20;
+    pub const column_row_h: f32 = 24;
+    pub const bar_h: f32 = 28;
+    pub const row_radius: f32 = 8;
+    pub const pane_inset: f32 = 10;
+    pub const date_col_w: f32 = 181;
+    pub const size_col_w: f32 = 97;
+    pub const kind_col_w: f32 = 115;
+};
+
 pub const IconSpec = struct {
     name: []const u8,
     color: ui.Color,
 };
+
+pub fn scrollbar(pal: Palette) @FieldType(ui.Style, "scrollbar") {
+    return .{ .overlay = pal.text.alpha(0.5) };
+}
+
+pub fn listScrollbar(c: *ui.Context, pal: Palette) void {
+    c.node(c.stack.items[c.stack.items.len - 1]).style.scrollbar = scrollbar(pal);
+}
 
 pub fn tagColor(bit: u3) ui.Color {
     const idx: usize = @min(@as(usize, bit), volumes.finder_tags.len - 1);
@@ -107,6 +163,8 @@ pub fn uiIconName(raw: []const u8) []const u8 {
         .{ "list.bullet.indent", "list.bullet" },
         .{ "photo.on.rectangle.angled", "photo" },
         .{ "folder.fill", "folder" },
+        .{ "rectangle.split.3x1", "rectangle.split.2x1" },
+        .{ "squares.below.rectangle", "photo" },
     };
     for (map) |m| {
         if (std.mem.eql(u8, raw, m[0])) return m[1];
@@ -116,7 +174,7 @@ pub fn uiIconName(raw: []const u8) []const u8 {
 
 pub fn iconForEntry(listing: *const fs_entry.FolderListing, e: fs_entry.DirEntry, pal: Palette) IconSpec {
     if ((e.kind & 3) == walk.KIND_LINK) return .{ .name = uiIconName("arrow.right.square"), .color = pal.muted };
-    if (e.isFolderRow()) return .{ .name = uiIconName("folder"), .color = pal.folder };
+    if (e.isFolderRow()) return .{ .name = uiIconName("folder.fill"), .color = pal.folder };
     if ((e.flags & fs_entry.FLAG_APP) != 0) return .{ .name = uiIconName("app.badge"), .color = pal.accent };
     if (e.isPackage()) return .{ .name = uiIconName("cube"), .color = pal.muted };
     const ext = listing.extOf(e);
@@ -132,7 +190,7 @@ pub fn iconForPath(path: []const u8, kind: u8, pal: Palette) IconSpec {
             return .{ .name = uiIconName("app.badge"), .color = pal.accent };
         }
         if (fs_entry.isPackageName(nm)) return .{ .name = uiIconName("cube"), .color = pal.muted };
-        return .{ .name = uiIconName("folder"), .color = pal.folder };
+        return .{ .name = uiIconName("folder.fill"), .color = pal.folder };
     }
     if (std.mem.lastIndexOfScalar(u8, nm, '.')) |dot| {
         if (dot + 1 < nm.len) return iconForExt(nm[dot + 1 ..], pal);
@@ -187,11 +245,71 @@ pub fn kindLabel(listing: *const fs_entry.FolderListing, e: fs_entry.DirEntry) [
 }
 
 pub fn fmtBytesBuf(buf: []u8, bytes: u64) []const u8 {
-    if (bytes < 1000) return std.fmt.bufPrint(buf, "{d} B", .{bytes}) catch "?";
+    if (bytes == 0) return "Zero bytes";
+    if (bytes == 1) return "1 byte";
+    if (bytes < 1000) return std.fmt.bufPrint(buf, "{d} bytes", .{bytes}) catch "?";
     const f: f64 = @floatFromInt(bytes);
-    if (bytes < 1_000_000) return std.fmt.bufPrint(buf, "{d:.1} KB", .{f / 1000.0}) catch "?";
+    if (bytes < 999_500) return std.fmt.bufPrint(buf, "{d:.0} KB", .{f / 1000.0}) catch "?";
     if (bytes < 1_000_000_000) return std.fmt.bufPrint(buf, "{d:.1} MB", .{f / 1_000_000.0}) catch "?";
-    return std.fmt.bufPrint(buf, "{d:.2} GB", .{f / 1_000_000_000.0}) catch "?";
+    if (bytes < 100_000_000_000) return std.fmt.bufPrint(buf, "{d:.2} GB", .{f / 1_000_000_000.0}) catch "?";
+    return std.fmt.bufPrint(buf, "{d:.1} GB", .{f / 1_000_000_000.0}) catch "?";
+}
+
+pub const LocalDate = struct { year: u32, month: u32, day: u32, hour: u32, minute: u32 };
+
+const month_names = [_][]const u8{ "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+
+pub const Clock = enum { h12, h24 };
+
+pub fn fmtDateBuf(buf: []u8, d: LocalDate, days_ago: i64, clock: Clock) []const u8 {
+    var time_buf: [16]u8 = undefined;
+    const hour12: u32 = if (d.hour % 12 == 0) 12 else d.hour % 12;
+    const half: []const u8 = if (d.hour < 12) "AM" else "PM";
+    const at = switch (clock) {
+        .h12 => std.fmt.bufPrint(&time_buf, "{d}:{d:0>2} {s}", .{ hour12, d.minute, half }),
+        .h24 => std.fmt.bufPrint(&time_buf, "{d:0>2}:{d:0>2}", .{ d.hour, d.minute }),
+    } catch return "--";
+    if (days_ago == 0) return std.fmt.bufPrint(buf, "Today at {s}", .{at}) catch "--";
+    if (days_ago == 1) return std.fmt.bufPrint(buf, "Yesterday at {s}", .{at}) catch "--";
+    const month = month_names[@min(d.month -| 1, 11)];
+    return std.fmt.bufPrint(buf, "{s} {d}, {d} at {s}", .{ month, d.day, d.year, at }) catch "--";
+}
+
+var system_clock: ?Clock = null;
+
+fn systemClock() Clock {
+    if (system_clock) |cached| return cached;
+    const found: Clock = blk: {
+        if (comptime ui.portable) break :blk .h12;
+        const objc = nanoui.objc;
+        const pool = objc.Pool.push();
+        defer pool.pop();
+        const locale = objc.msg(?objc.Object, objc.class("NSLocale"), "currentLocale", .{}) orelse break :blk .h12;
+        const pattern = objc.msg(?objc.Object, objc.class("NSDateFormatter"), "dateFormatFromTemplate:options:locale:", .{ objc.nsString("j"), @as(usize, 0), locale });
+        break :blk if (std.mem.indexOfScalar(u8, objc.fromNSString(pattern), 'a') != null) .h12 else .h24;
+    };
+    system_clock = found;
+    return found;
+}
+
+const Tm = extern struct {
+    sec: c_int,
+    min: c_int,
+    hour: c_int,
+    mday: c_int,
+    mon: c_int,
+    year: c_int,
+    wday: c_int,
+    yday: c_int,
+    isdst: c_int,
+    gmtoff: c_long,
+    zone: ?[*:0]const u8,
+};
+extern "c" fn localtime_r(t: *const c_long, out: *Tm) ?*Tm;
+extern "c" fn time(t: ?*c_long) c_long;
+
+fn localDay(secs: c_long, tm: Tm) i64 {
+    return @divFloor(@as(i64, secs) + tm.gmtoff, 86_400);
 }
 
 pub fn fmtBytes(c: *ui.Context, bytes: u64) []const u8 {
@@ -201,29 +319,22 @@ pub fn fmtBytes(c: *ui.Context, bytes: u64) []const u8 {
 
 pub fn fmtMtimeBuf(buf: []u8, mtime: u32) []const u8 {
     if (mtime == 0) return "--";
-    const secs: i64 = @intCast(mtime);
-    const days = @divFloor(secs, 86_400);
-    const rem = @mod(secs, 86_400);
-    const hour: u32 = @intCast(@divFloor(rem, 3600));
-    const min: u32 = @intCast(@divFloor(@mod(rem, 3600), 60));
-
-    const z = days + 719468;
-    const era = @divFloor(if (z >= 0) z else z - 146096, 146097);
-    const doe: u64 = @intCast(z - era * 146097);
-    const yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    var y: i64 = @as(i64, @intCast(yoe)) + era * 400;
-    const doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    const mp = (5 * doy + 2) / 153;
-    const d: u32 = @intCast(doy - (153 * mp + 2) / 5 + 1);
-    const m: u32 = @intCast(if (mp < 10) mp + 3 else mp - 9);
-    if (m <= 2) y += 1;
-    const uy: u32 = @intCast(@max(y, 0));
-
-    return std.fmt.bufPrint(buf, "{d:0>4}-{d:0>2}-{d:0>2} {d:0>2}:{d:0>2}", .{ uy, m, d, hour, min }) catch "--";
+    const secs: c_long = @intCast(mtime);
+    const now: c_long = time(null);
+    var tm: Tm = undefined;
+    var now_tm: Tm = undefined;
+    if (localtime_r(&secs, &tm) == null or localtime_r(&now, &now_tm) == null) return "--";
+    return fmtDateBuf(buf, .{
+        .year = @intCast(@max(tm.year + 1900, 0)),
+        .month = @intCast(tm.mon + 1),
+        .day = @intCast(tm.mday),
+        .hour = @intCast(tm.hour),
+        .minute = @intCast(tm.min),
+    }, localDay(now, now_tm) - localDay(secs, tm), systemClock());
 }
 
 pub fn fmtMtime(c: *ui.Context, mtime: u32) []const u8 {
-    var buf: [32]u8 = undefined;
+    var buf: [48]u8 = undefined;
     return c.alloc().dupe(u8, fmtMtimeBuf(&buf, mtime)) catch "--";
 }
 

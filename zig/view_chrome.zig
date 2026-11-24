@@ -22,9 +22,10 @@ pub fn iconBtn(
     return it;
 }
 
-pub fn toolbar(s: *AppState, c: *ui.Context, pal: Palette) void {
+pub fn toolbar(s: *AppState, c: *ui.Context, pal: Palette, beside_sidebar: bool) void {
     const compact = c.size.w < 740;
-    const bar = ui.div(c).row().wFull().h(44).itemsCenter().justifyBetween().pl(if (compact) 74 else 80).pr(12).gap(8).bg(pal.chrome).border(pal.divider).borderW(0.5);
+    const window_buttons_w: f32 = 88;
+    const bar = ui.div(c).row().wFull().h(theme.metric.toolbar_h).itemsCenter().justifyBetween().pl(if (beside_sidebar) 12 else window_buttons_w).pr(12).gap(8).bg(pal.chrome).border(pal.divider).borderW(0.5);
     defer bar.end();
 
     {
@@ -56,8 +57,8 @@ pub fn toolbar(s: *AppState, c: *ui.Context, pal: Palette) void {
         else
             std.fs.path.basename(s.currentPath());
         ui.text(c, cur_name, .{
-            .size = 14,
-            .weight = .semibold,
+            .size = theme.size.title,
+            .weight = .bold,
             .color = pal.text,
             .truncate = .ellipsis,
         });
@@ -88,13 +89,13 @@ pub fn toolbar(s: *AppState, c: *ui.Context, pal: Palette) void {
             const specs = [_]struct { mode: ViewMode, icon: []const u8, lbl: []const u8 }{
                 .{ .mode = .icon, .icon = "square.grid.2x2", .lbl = "Icon View" },
                 .{ .mode = .list, .icon = "list.bullet", .lbl = "List View" },
-                .{ .mode = .column, .icon = "rectangle.split.2x1", .lbl = "Column View" },
-                .{ .mode = .gallery, .icon = "photo", .lbl = "Gallery View" },
+                .{ .mode = .column, .icon = "rectangle.split.3x1", .lbl = "Column View" },
+                .{ .mode = .gallery, .icon = "squares.below.rectangle", .lbl = "Gallery View" },
             };
             for (specs, 0..) |sp, idx| {
                 ui.key(c, c.print("vm-{d}", .{idx}));
                 const selected = s.view_mode == sp.mode;
-                if (iconBtn(c, sp.icon, sp.lbl, .{
+                if (iconBtn(c, theme.uiIconName(sp.icon), sp.lbl, .{
                     .size = .xs,
                     .selected = selected,
                     .variant = if (selected) .default else .ghost,
@@ -111,13 +112,13 @@ pub fn toolbar(s: *AppState, c: *ui.Context, pal: Palette) void {
             }
         }
 
-        const search_w: f32 = if (compact) 136 else 220;
+        const search_w: f32 = if (compact) 136 else 240;
         {
             const sbox = ui.div(c).row().itemsCenter().gap(4);
             defer sbox.end();
             ui.key(c, "tb-search");
             const sres = ui.textField(c, &s.search_buf, .{
-                .placeholder = "Search Mac",
+                .placeholder = "Search",
                 .width = .{ .px = search_w },
                 .size = 12.5,
                 .select_all_on_focus = true,
@@ -144,7 +145,7 @@ pub fn toolbar(s: *AppState, c: *ui.Context, pal: Palette) void {
 }
 
 pub fn sidebar(s: *AppState, c: *ui.Context, pal: Palette) void {
-    var box = ui.div(c).column().w(208).hFull().py(10).px(8).gap(4).border(pal.divider).borderW(0.5).scrollY();
+    var box = ui.div(c).column().w(216).hFull().pt(theme.metric.toolbar_h).pb(10).px(8).gap(2).border(pal.divider).borderW(0.5).scrollY().scrollbar(theme.scrollbar(pal));
     box = box.bg(pal.surface);
     defer box.end();
 
@@ -182,30 +183,28 @@ pub fn sidebar(s: *AppState, c: *ui.Context, pal: Palette) void {
 fn sectionTitle(c: *ui.Context, title: []const u8, pal: Palette) void {
     const h = ui.div(c).row().wFull().px(8).pt(8).pb(2);
     defer h.end();
-    ui.text(c, title, .{ .size = 11, .weight = .semibold, .color = pal.subtle });
+    ui.text(c, title, .{ .size = theme.size.caption, .weight = .semibold, .color = pal.subtle });
 }
 
 fn sidebarRow(s: *AppState, c: *ui.Context, pal: Palette, item: volumes.SidebarItem, idx: usize) void {
     ui.key(c, c.print("sb-{d}", .{idx}));
     const active = s.active_tag_filter == null and std.mem.eql(u8, s.currentPath(), item.path);
-    const row = ui.div(c).row().wFull().px(8).py(5).gap(8).itemsCenter().rounded(6).bg(if (active) pal.row_sel else pal.bg.alpha(0)).hover(if (active) pal.row_sel else pal.row_hover).control();
+    const row = ui.div(c).row().wFull().px(8).py(7).gap(8).itemsCenter().rounded(8).bg(if (active) pal.row_sel_muted else pal.bg.alpha(0)).hover(if (active) pal.row_sel_muted else pal.row_hover).control();
     const it = row.interaction();
     theme.describeNode(c, row.index, .row, item.label, item.path, active, true);
     defer row.end();
     ui.icon(c, theme.uiIconName(item.icon), .{
-        .size = 14,
-        .color = if (active) pal.accent_text else pal.accent,
-        .frame = 16,
+        .size = 15,
+        .color = pal.accent,
+        .frame = 18,
     });
-    const text_col = if (active) pal.accent_text else pal.text;
-    const sub_col = if (active) pal.accent_text.alpha(0.85) else pal.subtle;
     if (item.kind == .location and item.total_bytes > 0) {
         const col = ui.div(c).column().grow().gap(1);
         defer col.end();
-        ui.text(c, item.label, .{ .size = 12.5, .weight = if (active) .medium else .regular, .color = text_col, .truncate = .ellipsis });
-        ui.textf(c, .{ .size = 10.5, .color = sub_col, .tabular = true }, "{s} free", .{theme.fmtBytes(c, item.free_bytes)});
+        ui.text(c, item.label, .{ .size = theme.size.body, .color = pal.text, .truncate = .ellipsis });
+        ui.textf(c, .{ .size = 10.5, .color = pal.subtle, .tabular = true }, "{s} free", .{theme.fmtBytes(c, item.free_bytes)});
     } else {
-        ui.text(c, item.label, .{ .size = 12.5, .weight = if (active) .medium else .regular, .color = text_col, .truncate = .ellipsis });
+        ui.text(c, item.label, .{ .size = theme.size.body, .color = pal.text, .truncate = .ellipsis });
     }
     if (it.clicked) {
         s.navigateTo(item.path, true) catch {};
@@ -215,27 +214,35 @@ fn sidebarRow(s: *AppState, c: *ui.Context, pal: Palette, item: volumes.SidebarI
 fn sidebarTagRow(s: *AppState, c: *ui.Context, pal: Palette, item: volumes.SidebarItem, idx: usize) void {
     ui.key(c, c.print("sbt-{d}", .{idx}));
     const active = s.active_tag_filter == item.tag_bit;
-    const row = ui.div(c).row().wFull().px(8).py(4).gap(8).itemsCenter().rounded(6).bg(if (active) pal.row_sel_muted else pal.bg.alpha(0)).hover(pal.row_hover).control();
+    const row = ui.div(c).row().wFull().px(12).py(5).gap(10).itemsCenter().rounded(6).bg(if (active) pal.row_sel_muted else pal.bg.alpha(0)).hover(if (active) pal.row_sel_muted else pal.row_hover).control();
     const it = row.interaction();
     theme.describeNode(c, row.index, .row, item.label, "Tag", active, true);
     defer row.end();
     const dot = ui.div(c).w(10).h(10).roundedFull().circular().bg(theme.tagColor(item.tag_bit));
     dot.end();
-    ui.text(c, item.label, .{ .size = 12.5, .weight = if (active) .medium else .regular, .color = pal.text });
+    ui.text(c, item.label, .{ .size = theme.size.body, .color = pal.text });
     if (it.clicked) s.setTagFilter(item.tag_bit);
+}
+
+fn bootVolumeFreeBytes(s: *const AppState) u64 {
+    for (s.sidebar) |item| {
+        if (item.kind == .location and std.mem.eql(u8, item.path, "/")) return item.free_bytes;
+    }
+    return 0;
 }
 
 pub fn bottomBars(s: *AppState, c: *ui.Context, pal: Palette) void {
     const compact = c.size.w < 740;
     if (s.show_path_bar and !compact) {
-        const pbar = ui.div(c).row().wFull().h(26).px(12).gap(4).itemsCenter().bg(pal.surface).border(pal.divider).borderW(0.5);
+        const pbar = ui.div(c).row().wFull().h(theme.metric.bar_h).px(12).gap(4).itemsCenter().bg(pal.surface).border(pal.divider).borderW(0.5);
         defer pbar.end();
 
         const cur = s.currentPath();
         var nav_target: ?[]const u8 = null;
-        const root_btn = ui.div(c).row().px(4).py(2).rounded(4).hover(pal.row_hover).control();
+        const root_btn = ui.div(c).row().px(4).py(2).gap(4).itemsCenter().rounded(4).hover(pal.row_hover).control();
         const rit = root_btn.interaction();
         ui.icon(c, theme.uiIconName("internaldrive"), .{ .size = 11, .color = pal.muted });
+        ui.text(c, "Macintosh HD", .{ .size = 11.5, .color = if (cur.len <= 1) pal.text else pal.muted });
         root_btn.end();
         if (rit.clicked) nav_target = "/";
 
@@ -248,8 +255,9 @@ pub fn bottomBars(s: *AppState, c: *ui.Context, pal: Palette) void {
             ui.icon(c, "chevron.right", .{ .size = 9, .color = pal.subtle });
             ui.key(c, c.print("pb-{d}", .{seg_idx}));
             seg_idx += 1;
-            const seg = ui.div(c).row().px(5).py(2).rounded(4).hover(pal.row_hover).control();
+            const seg = ui.div(c).row().px(5).py(2).gap(4).itemsCenter().rounded(4).hover(pal.row_hover).control();
             const sit = seg.interaction();
+            ui.icon(c, theme.uiIconName("folder.fill"), .{ .size = 11, .color = pal.folder });
             ui.text(c, comp, .{ .size = 11.5, .color = if (acc_end == cur.len) pal.text else pal.muted });
             seg.end();
             if (sit.clicked and !std.mem.eql(u8, target_slice, cur)) {
@@ -260,10 +268,11 @@ pub fn bottomBars(s: *AppState, c: *ui.Context, pal: Palette) void {
     }
 
     if (s.show_status_bar) {
-        const sbar = ui.div(c).row().wFull().h(24).px(12).itemsCenter().justifyBetween().bg(pal.chrome).border(pal.divider).borderW(0.5);
+        const sbar = ui.div(c).row().wFull().h(theme.metric.bar_h).px(12).center().bg(pal.chrome).border(pal.divider).borderW(0.5);
         defer sbar.end();
+        const style: ui.TextStyle =.{ .size = theme.size.caption, .color = pal.muted, .tabular = true };
         if (s.isSearchActive()) {
-            ui.textf(c, .{ .size = 11, .color = pal.muted, .tabular = true }, "{d} matches · {d} us · Tier {d}", .{
+            ui.textf(c, style, "{d} matches · {d} us · Tier {d}", .{
                 s.search_results.hits.items.len,
                 s.search_results.elapsed_us,
                 s.search_results.tier_used,
@@ -271,21 +280,14 @@ pub fn bottomBars(s: *AppState, c: *ui.Context, pal: Palette) void {
         } else {
             const rows = s.visibleRows();
             const sel_cnt = s.tabConst().selected.count();
+            const available = theme.fmtBytes(c, bootVolumeFreeBytes(s));
             if (sel_cnt > 1) {
-                ui.textf(c, .{ .size = 11, .color = pal.muted, .tabular = true }, "{d} of {d} selected · {s}", .{
-                    sel_cnt,
-                    rows.len,
-                    theme.fmtBytes(c, s.listing.total_bytes),
-                });
+                ui.textf(c, style, "{d} of {d} selected, {s} available", .{ sel_cnt, rows.len, available });
+            } else if (rows.len == 1) {
+                ui.textf(c, style, "1 item, {s} available", .{available});
             } else {
-                ui.textf(c, .{ .size = 11, .color = pal.muted, .tabular = true }, "{d} items · {s}", .{
-                    rows.len,
-                    theme.fmtBytes(c, s.listing.total_bytes),
-                });
+                ui.textf(c, style, "{d} items, {s} available", .{ rows.len, available });
             }
-        }
-        if (!compact) {
-            ui.text(c, "Cmd+K Quick Open  ·  Space Quick Look", .{ .size = 11, .color = pal.subtle });
         }
     }
 }

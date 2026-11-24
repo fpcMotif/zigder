@@ -7,6 +7,7 @@ const app_sel = @import("app_sel.zig");
 const theme = @import("theme.zig");
 const Palette = theme.Palette;
 const fs_entry = @import("fs_entry.zig");
+const file_icons = @import("file_icons.zig");
 
 pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
     const outer = ui.div(c).row().sizeFull().bg(pal.bg).clip();
@@ -26,17 +27,11 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
 
     for (s.columns.items[start_idx..], start_idx..) |*pane, pi| {
         ui.key(c, c.print("colpane-{d}", .{pi}));
-        const col_w: f32 = if (c.size.w < 740) 190 else 216;
+        const col_w: f32 = 164;
         const pbox = ui.div(c).column().w(col_w).hFull().bg(pal.bg).border(pal.divider).borderW(0.5);
         defer pbox.end();
 
-        {
-            const hdr = ui.div(c).row().wFull().h(26).px(10).itemsCenter().bg(pal.surface).border(pal.divider).borderW(0.5);
-            defer hdr.end();
-            const title = if (std.mem.eql(u8, pane.path, "/")) "Macintosh HD" else std.fs.path.basename(pane.path);
-            ui.text(c, title, .{ .size = 11.5, .weight = .semibold, .color = pal.muted, .truncate = .ellipsis });
-        }
-
+        const focused_pane = pi + 1 == s.columns.items.len;
         const count = pane.listing.order.items.len;
         if (count == 0) {
             const empty_p = ui.div(c).column().sizeFull().center();
@@ -45,27 +40,30 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
             continue;
         }
 
-        var list = ui.list(c, .{ .count = count, .row_height = 24, .gap = 1, .padding = .xy(4, 4) });
+        var list = ui.list(c, .{ .count = count, .row_height = theme.metric.column_row_h, .gap = 0, .padding = .xy(7, 4) });
+        theme.listScrollbar(c, pal);
         while (list.next()) |r| {
             const eid = pane.listing.order.items[r];
             const ent = pane.listing.entries.items[eid];
             const nm = pane.listing.nameOf(ent);
             const sel = if (pane.selected_row) |sr| sr == r else false;
-            const row = ui.div(c).row().wFull().h(24).px(8).gap(6).itemsCenter().justifyBetween().rounded(5).bg(if (sel) pal.row_sel else pal.bg).hover(if (sel) pal.row_sel else pal.row_hover).control();
+            const emphasized = sel and focused_pane;
+            const sel_bg = if (emphasized) pal.row_sel else pal.row_sel_muted;
+            const row = ui.div(c).row().wFull().h(theme.metric.column_row_h).px(6).gap(4).itemsCenter().justifyBetween().rounded(7).bg(if (sel) sel_bg else pal.bg).hover(if (sel) sel_bg else pal.row_hover).control();
             const it = row.interaction();
             theme.describeNode(c, row.index, .row, nm, "", sel, true);
             defer row.end();
 
-            const fg = if (sel) pal.accent_text else pal.text;
+            const fg = if (emphasized) pal.accent_text else pal.text;
             const ic = theme.iconForEntry(&pane.listing, ent, pal);
             {
                 const left = ui.div(c).row().grow().gap(6).itemsCenter().clip();
                 defer left.end();
-                ui.icon(c, ic.name, .{ .size = 14, .color = if (sel) pal.accent_text else ic.color, .frame = 16 });
-                ui.text(c, nm, .{ .size = 12.5, .color = fg, .truncate = .ellipsis });
+                file_icons.entry(c, &pane.listing, ent, 16, ic, if (emphasized) pal.accent_text else null);
+                ui.text(c, nm, .{ .size = theme.size.body, .color = fg, .truncate = .middle });
             }
             if (ent.isFolderRow()) {
-                ui.icon(c, "chevron.right", .{ .size = 10, .color = if (sel) pal.accent_text else pal.subtle });
+                ui.icon(c, "chevron.right", .{ .size = 7, .weight = .semibold, .color = if (emphasized) pal.accent_text else pal.subtle });
             }
 
             if (it.clicked) {
@@ -90,7 +88,7 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
     if (s.inspector.valid) {
         const nm = std.fs.path.basename(s.inspector_path.items);
         const ic = theme.iconForPath(s.inspector_path.items, if (s.inspector.is_dir) 1 else 0, pal);
-        ui.icon(c, ic.name, .{ .size = 42, .color = ic.color });
+        file_icons.path(c, s.inspector_path.items, if (s.inspector.is_dir) 1 else 0, 64, ic, null);
         ui.text(c, nm, .{ .size = 15, .weight = .semibold, .color = pal.text, .wrap = true });
         ui.text(c, s.inspector.kindText(), .{ .size = 12.5, .color = pal.muted });
         ui.text(c, theme.fmtBytes(c, s.inspector.size), .{ .size = 12.5, .color = pal.muted, .tabular = true });

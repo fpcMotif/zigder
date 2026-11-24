@@ -10,9 +10,11 @@ const view_icon = @import("view_icon.zig");
 const view_gallery = @import("view_gallery.zig");
 const view_inspector = @import("view_inspector.zig");
 const view_overlays = @import("view_overlays.zig");
+const file_icons = @import("file_icons.zig");
 
 pub fn view(s: *AppState, c: *ui.Context) void {
-    c.title_bar_height = 44;
+    c.title_bar_height = theme.metric.toolbar_h;
+    file_icons.beginFrame();
 
     s.text_focused = c.focus_is_text;
     const gen = s.engine.generation.load(.acquire);
@@ -29,16 +31,19 @@ pub fn view(s: *AppState, c: *ui.Context) void {
     const show_insp = s.show_inspector and c.size.w >= 880;
 
     {
-        const root = ui.div(c).column().sizeFull().bg(pal.bg);
+        const root = ui.div(c).row().sizeFull().bg(pal.bg);
         defer root.end();
 
-        view_chrome.toolbar(s, c, pal);
+        if (show_sb) view_chrome.sidebar(s, c, pal);
+
+        const main = ui.div(c).column().grow().hFull().clip();
+        defer main.end();
+
+        view_chrome.toolbar(s, c, pal, show_sb);
 
         {
             const body = ui.div(c).row().grow().wFull().clip();
             defer body.end();
-
-            if (show_sb) view_chrome.sidebar(s, c, pal);
 
             {
                 const center = ui.div(c).column().grow().hFull().clip();
