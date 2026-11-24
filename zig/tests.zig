@@ -409,4 +409,5 @@ test "live_sync APFS firmlink canonicalization, fast dead-bit totals, and scoped
 test {
     _ = @import("tests_ui.zig");
     _ = @import("tests_state.zig");
+    _ = @import("tests_search.zig");
 }

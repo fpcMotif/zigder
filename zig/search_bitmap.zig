@@ -312,16 +312,16 @@ pub fn runBitmapTier(
     }
 
     if (pos.len == 1) {
-        if (matched_names.items.len > 1) {
-            std.mem.sort(search_nfa.NameHitEntry, matched_names.items, {}, struct {
-                fn lessThan(_: void, a: search_nfa.NameHitEntry, b: search_nfa.NameHitEntry) bool {
-                    if (a.max_tot != b.max_tot) return a.max_tot > b.max_tot;
-                    return a.id < b.id;
-                }
-            }.lessThan);
-        }
         const range_len = hi - lo;
         if (ok_entries <= 60_000 or range_len >= ok_entries / 2 or (range_len > 250_000 and ok_entries <= 300_000)) {
+            if (matched_names.items.len > 1) {
+                std.mem.sort(search_nfa.NameHitEntry, matched_names.items, {}, struct {
+                    fn lessThan(_: void, a: search_nfa.NameHitEntry, b: search_nfa.NameHitEntry) bool {
+                        if (a.max_tot != b.max_tot) return a.max_tot > b.max_tot;
+                        return a.id < b.id;
+                    }
+                }.lessThan);
+            }
             for (matched_names.items) |m| {
                 if (top.full and m.max_tot < top.floor_score) break;
                 try emitSingleEntries(gpa, live, q, lo, hi, now, m.id, .{
@@ -355,7 +355,7 @@ pub fn runBitmapTier(
     for (matched_names.items, 0..) |m, mi| name_lookup[m.id] = @intCast(mi);
 
     if (pos.len <= 1 and neg.len == 0) {
-        try scanEntriesDirect(gpa, live, q, lo, hi, now, name_lookup, top);
+        try scanEntriesDirect(gpa, live, q, lo, hi, now, .{ .lookup = name_lookup, .hits = matched_names.items }, top);
         return;
     }
 
@@ -425,6 +425,11 @@ inline fn zoneOk(z: *const fmt.Zone, q: *const query_mod.Query) bool {
     return true;
 }
 
+const MatchedNames = struct {
+    lookup: []const i32,
+    hits: []const search_nfa.NameHitEntry,
+};
+
 fn scanEntriesDirect(
     gpa: std.mem.Allocator,
     live: *const live_mod.Live,
@@ -432,7 +437,7 @@ fn scanEntriesDirect(
     lo: usize,
     hi: usize,
     now: u32,
-    name_lookup: ?[]const i32,
+    matched: ?MatchedNames,
     top: *TopK,
 ) !void {
     const idx = &live.base;
@@ -455,8 +460,11 @@ fn scanEntriesDirect(
         for (a..end) |ei| {
             const e: u32 = @intCast(ei);
             const kid = en[e];
-            if (name_lookup) |nl| {
-                if (nl[kid] < 0) continue;
+            var name_score: i32 = 0;
+            if (matched) |mn| {
+                const mi = mn.lookup[kid];
+                if (mi < 0) continue;
+                name_score = mn.hits[@intCast(mi)].score;
             }
             if (live.isDead(e)) continue;
             const kv = live.kindOf(e);
@@ -471,7 +479,7 @@ fn scanEntriesDirect(
             const bit = @as(u64, 1) << @intCast(kid & 63);
             const is_dot = (bm_dot[w] & bit) != 0;
             const is_app = (bm_app[w] & bit) != 0;
-            const tot = @as(i32, dprior[par[e]]) + baseline.rankTweaks(is_dot, is_app, kv, mt, now);
+            const tot = name_score + @as(i32, dprior[par[e]]) + baseline.rankTweaks(is_dot, is_app, kv, mt, now);
             try top.push(gpa, tot, e, walk.NONE);
         }
         a = end;
