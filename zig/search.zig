@@ -45,112 +45,6 @@ pub const SearchResults = struct {
     }
 };
 
-pub const SearchCache = struct {
-    epoch: u64 = 0,
-    complete: bool = false,
-    token_buf: [128]u8 = undefined,
-    token_len: usize = 0,
-    mode: fuzzy.Mode = .fuzzy,
-    takes_typos: bool = false,
-    has_scope: bool = false,
-    scope_lo: usize = 0,
-    scope_hi: usize = 0,
-    ext_hash: u64 = 0,
-    kind: ?u8 = null,
-    apps: bool = false,
-    size_min: u64 = 0,
-    size_max: u64 = std.math.maxInt(u64),
-    mtime_min: u32 = 0,
-    mtime_max: u32 = std.math.maxInt(u32),
-    neg_hash: u64 = 0,
-    name_ids: std.ArrayList(u32) = .empty,
-
-    pub fn deinit(c: *SearchCache, gpa: std.mem.Allocator) void {
-        c.name_ids.deinit(gpa);
-    }
-
-    pub fn invalidate(c: *SearchCache) void {
-        c.complete = false;
-        c.name_ids.clearRetainingCapacity();
-    }
-
-    fn hashExts(exts: []const []const u8) u64 {
-        var h: u64 = exts.len;
-        for (exts) |e| h = std.hash.Wyhash.hash(h, e);
-        return h;
-    }
-
-    fn hashNeg(tokens: []const fuzzy.Token) u64 {
-        var h: u64 = 0;
-        for (tokens) |t| {
-            if (t.negate) h = std.hash.Wyhash.hash(h ^ @backingInt(t.mode), t.text);
-        }
-        return h;
-    }
-
-    fn matchesNarrowing(
-        c: *const SearchCache,
-        live: *const live_mod.Live,
-        q: *const query_mod.Query,
-        tok: *const fuzzy.Token,
-        lo: usize,
-        hi: usize,
-    ) bool {
-        if (!c.complete or c.epoch != live.epoch) return false;
-        if (tok.mode != c.mode or fuzzy.takesTypos(tok.text, tok.mode) != c.takes_typos) return false;
-        if (c.has_scope != (q.scope != null)) return false;
-        if (c.has_scope and (c.scope_lo != lo or c.scope_hi != hi)) return false;
-        if (c.ext_hash != hashExts(q.exts.items) or c.kind != q.kind or c.apps != q.apps) return false;
-        if (c.size_min != q.size_min or c.size_max != q.size_max) return false;
-        if (c.mtime_min != q.mtime_min or c.mtime_max != q.mtime_max) return false;
-        if (c.neg_hash != hashNeg(q.tokens.items)) return false;
-        if (tok.text.len == 0 or c.token_len == 0 or tok.text.len < c.token_len) return false;
-        const prev = c.token_buf[0..c.token_len];
-        return if (tok.mode == .suffix)
-            std.mem.endsWith(u8, tok.text, prev)
-        else
-            std.mem.startsWith(u8, tok.text, prev);
-    }
-
-    fn store(
-        c: *SearchCache,
-        gpa: std.mem.Allocator,
-        live: *const live_mod.Live,
-        q: *const query_mod.Query,
-        tok: *const fuzzy.Token,
-        lo: usize,
-        hi: usize,
-        ids: []const u32,
-    ) void {
-        if (tok.text.len > c.token_buf.len or ids.len > 16_384) {
-            c.complete = false;
-            return;
-        }
-        c.name_ids.clearRetainingCapacity();
-        c.name_ids.appendSlice(gpa, ids) catch {
-            c.complete = false;
-            return;
-        };
-        @memcpy(c.token_buf[0..tok.text.len], tok.text);
-        c.token_len = tok.text.len;
-        c.epoch = live.epoch;
-        c.mode = tok.mode;
-        c.takes_typos = fuzzy.takesTypos(tok.text, tok.mode);
-        c.has_scope = q.scope != null;
-        c.scope_lo = lo;
-        c.scope_hi = hi;
-        c.ext_hash = hashExts(q.exts.items);
-        c.kind = q.kind;
-        c.apps = q.apps;
-        c.size_min = q.size_min;
-        c.size_max = q.size_max;
-        c.mtime_min = q.mtime_min;
-        c.mtime_max = q.mtime_max;
-        c.neg_hash = hashNeg(q.tokens.items);
-        c.complete = true;
-    }
-};
-
 pub fn scopeRange(idx: *const index_read.Index, scope: ?[]const u8) ?[2]usize {
     const s = scope orelse return .{ 1, idx.n };
     if (std.mem.eql(u8, s, "/")) return .{ 1, idx.n };
@@ -163,7 +57,6 @@ pub fn search(
     gpa: std.mem.Allocator,
     live: *const live_mod.Live,
     q: *const query_mod.Query,
-    cache: ?*SearchCache,
     out: *SearchResults,
 ) !void {
     const t0 = measure.nanos();
@@ -204,7 +97,6 @@ pub fn search(
                 lo,
                 hi,
                 now,
-                cache,
                 &top,
             );
         }
@@ -260,7 +152,6 @@ fn searchBase(
     lo: usize,
     hi: usize,
     now: u32,
-    cache: ?*SearchCache,
     top: *TopK,
 ) !u8 {
     const idx = &live.base;
@@ -275,26 +166,9 @@ fn searchBase(
     var neg_dir_cache: std.AutoHashMapUnmanaged(u32, bool) = .empty;
     defer neg_dir_cache.deinit(gpa);
 
-    if (pos.len == 1 and neg.len == 0) {
-        if (cache) |c| {
-            if (c.matchesNarrowing(live, q, pos[0], lo, hi)) {
-                var next_ids: std.ArrayList(u32) = .empty;
-                defer next_ids.deinit(gpa);
-                for (c.name_ids.items) |kid| {
-                    if (scoreNameSingle(idx, q, pos[0], neg, &allow_ext, kid)) |ns| {
-                        try next_ids.append(gpa, kid);
-                        try bitmap_tier.emitSingleEntries(gpa, live, q, lo, hi, now, kid, ns, neg, &neg_dir_cache, top);
-                    }
-                }
-                c.store(gpa, live, q, pos[0], lo, hi, next_ids.items);
-                return 0;
-            }
-        }
-    }
-
     if (pos.len == 1 and pos[0].text.len >= 3) {
         const tok = pos[0];
-        const done = try tryTrigramTier(gpa, live, q, tok, neg, &allow_ext, lo, hi, now, cache, &neg_dir_cache, top);
+        const done = try tryTrigramTier(gpa, live, q, tok, neg, &allow_ext, lo, hi, now, &neg_dir_cache, top);
         if (done) return 1;
         top.items.clearRetainingCapacity();
         top.floor = 0;
@@ -317,8 +191,6 @@ fn searchBase(
         return 2;
     }
 
-    var cache_ids: std.ArrayList(u32) = .empty;
-    defer cache_ids.deinit(gpa);
     try bitmap_tier.runBitmapTier(
         gpa,
         live,
@@ -331,13 +203,7 @@ fn searchBase(
         now,
         &neg_dir_cache,
         top,
-        if (cache != null) &cache_ids else null,
     );
-    if (cache) |c| {
-        if (pos.len == 1 and neg.len == 0 and cache_ids.items.len > 0 and cache_ids.items.len <= 16_384) {
-            c.store(gpa, live, q, pos[0], lo, hi, cache_ids.items);
-        }
-    }
     return 2;
 }
 
@@ -382,7 +248,6 @@ fn tryTrigramTier(
     lo: usize,
     hi: usize,
     now: u32,
-    cache: ?*SearchCache,
     neg_cache: *std.AutoHashMapUnmanaged(u32, bool),
     top: *TopK,
 ) !bool {
@@ -426,10 +291,6 @@ fn tryTrigramTier(
     const rest = slices[1..];
     var cursors: [63]usize = @splat(0);
 
-    var matched_ids: std.ArrayList(u32) = .empty;
-    defer matched_ids.deinit(gpa);
-    const collect_cache = cache != null and neg.len == 0 and tok.mode != .fuzzy;
-
     for (primary) |kid| {
         const ni = info[kid];
         if (top.full and ni.key > std.math.minInt(i8) and max_tok_no_len + @as(i32, ni.key) < top.floor_score) {
@@ -444,22 +305,12 @@ fn tryTrigramTier(
         }
         if (!in_all) continue;
         if (scoreNameSingle(idx, q, tok, neg, allow_ext, kid)) |ns| {
-            if (collect_cache and matched_ids.items.len <= 16_384) {
-                try matched_ids.append(gpa, kid);
-            }
             try bitmap_tier.emitSingleEntries(gpa, live, q, lo, hi, now, kid, ns, neg, neg_cache, top);
         }
     }
     top.compact();
 
-    if (tok.mode != .fuzzy) {
-        if (cache) |c| {
-            if (neg.len == 0 and matched_ids.items.len <= 16_384) {
-                c.store(gpa, live, q, tok, lo, hi, matched_ids.items);
-            }
-        }
-        return true;
-    }
+    if (tok.mode != .fuzzy) return true;
     if (top.full) {
         const escape = @max(fuzzy.maxBrokenTrigramBound(tok.text), fuzzy.maxTypoBound(tok.text)) + @as(i32, idx.top_prior) + 35;
         if (top.floor_score >= escape) return true;

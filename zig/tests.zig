@@ -200,8 +200,6 @@ test "searcher matches brute-force oracle and Live overlay updates" {
     var live = try live_mod.Live.init(gpa, idx);
     defer live.deinit();
 
-    var cache: search_mod.SearchCache = .{};
-    defer cache.deinit(gpa);
     var res: search_mod.SearchResults = .{};
     defer res.deinit(gpa);
 
@@ -228,7 +226,7 @@ test "searcher matches brute-force oracle and Live overlay updates" {
         var q = try query_mod.Query.parse(gpa, qs, root);
         defer q.deinit(gpa);
         q.limit = 15;
-        try search_mod.search(gpa, &live, &q, &cache, &res);
+        try search_mod.search(gpa, &live, &q, &res);
         var oracle = try bruteForceSearch(gpa, &live, &q, now);
         defer oracle.deinit(gpa);
         try std.testing.expectEqual(oracle.items.len, res.hits.items.len);
@@ -245,13 +243,13 @@ test "searcher matches brute-force oracle and Live overlay updates" {
 
     var q2 = try query_mod.Query.parse(gpa, "fresh_live", root);
     defer q2.deinit(gpa);
-    try search_mod.search(gpa, &live, &q2, null, &res);
+    try search_mod.search(gpa, &live, &q2, &res);
     try std.testing.expectEqual(@as(usize, 1), res.hits.items.len);
     try std.testing.expectEqualStrings("/src/fresh_live_file.zig", res.pathOf(res.hits.items[0]));
 
     var q3 = try query_mod.Query.parse(gpa, "'main.zig", root);
     defer q3.deinit(gpa);
-    try search_mod.search(gpa, &live, &q3, null, &res);
+    try search_mod.search(gpa, &live, &q3, &res);
     try std.testing.expectEqual(@as(usize, 0), res.hits.items.len);
 
     _ = fsevents.currentId();

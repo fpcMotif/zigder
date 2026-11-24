@@ -232,7 +232,6 @@ pub const Engine = struct {
         raw_query: []const u8,
         scope_override: ?[]const u8,
         limit: usize,
-        cache: ?*search_mod.SearchCache,
         out: *search_mod.SearchResults,
     ) !void {
         _ = std.c.pthread_mutex_lock(&self.mutex);
@@ -247,7 +246,7 @@ pub const Engine = struct {
             if (scope_override) |sc| q.scope = try gpa.dupe(u8, sc);
         }
         q.limit = limit;
-        try search_mod.search(gpa, lv, &q, cache, out);
+        try search_mod.search(gpa, lv, &q, out);
     }
 
     pub fn recordChange(self: *Engine, dir_path: []const u8) void {

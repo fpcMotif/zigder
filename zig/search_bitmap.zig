@@ -282,7 +282,6 @@ pub fn runBitmapTier(
     now: u32,
     neg_cache: *std.AutoHashMapUnmanaged(u32, bool),
     top: *TopK,
-    out_cache_ids: ?*std.ArrayList(u32),
 ) !void {
     const idx = &live.base;
     if (pos.len == 0 and neg.len == 0 and q.exts.items.len == 0) {
@@ -295,7 +294,7 @@ pub fn runBitmapTier(
         plans[ti] = search_nfa.buildTokPlan(idx, tok);
     }
 
-    const seed_floor = if (pos.len == 1 and out_cache_ids == null)
+    const seed_floor = if (pos.len == 1)
         try computeSeedFloor(gpa, live, q, pos[0], neg, allow_ext, lo, hi, now, neg_cache)
     else
         std.math.minInt(i32);
@@ -303,13 +302,6 @@ pub fn runBitmapTier(
     var matched_names: std.ArrayList(search_nfa.NameHitEntry) = .empty;
     defer matched_names.deinit(gpa);
     const ok_entries = try live.pool.runScan(gpa, idx, q, pos, neg, allow_ext, plans[0..pos.len], seed_floor, &matched_names);
-
-    if (out_cache_ids) |cids| {
-        if (pos.len == 1 and neg.len == 0 and seed_floor == std.math.minInt(i32) and matched_names.items.len <= 16_384) {
-            try cids.ensureTotalCapacity(gpa, matched_names.items.len);
-            for (matched_names.items) |m| cids.appendAssumeCapacity(m.id);
-        }
-    }
 
     if (pos.len == 1) {
         const range_len = hi - lo;

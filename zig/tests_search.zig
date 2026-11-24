@@ -165,30 +165,26 @@ test "searcher matches brute-force oracle on an index above the selective thresh
     var bad: usize = 0;
     for (queries) |qs| {
         for ([_]usize{ 15, 200 }) |limit| {
-            for ([_]bool{ false, true }) |use_cache| {
-                var q = try query_mod.Query.parse(gpa, qs, "/nohome");
-                defer q.deinit(gpa);
-                q.limit = limit;
-                var cache: search_mod.SearchCache = .{};
-                defer cache.deinit(gpa);
-                try search_mod.search(gpa, &live, &q, if (use_cache) &cache else null, &res);
-                var oracle = try bruteForceSearch(gpa, &live, &q, now);
-                defer oracle.deinit(gpa);
-                var same = oracle.items.len == res.hits.items.len;
-                if (same) {
-                    for (oracle.items, res.hits.items) |ok, got| {
-                        const o_idx = ~@as(u32, @truncate(ok));
-                        const o_sc: i32 = @intCast(@as(i64, @intCast(ok >> 32)) + @as(i64, std.math.minInt(i32)));
-                        if (o_idx != got.idx or o_sc != got.score) {
-                            same = false;
-                            break;
-                        }
+            var q = try query_mod.Query.parse(gpa, qs, "/nohome");
+            defer q.deinit(gpa);
+            q.limit = limit;
+            try search_mod.search(gpa, &live, &q, &res);
+            var oracle = try bruteForceSearch(gpa, &live, &q, now);
+            defer oracle.deinit(gpa);
+            var same = oracle.items.len == res.hits.items.len;
+            if (same) {
+                for (oracle.items, res.hits.items) |ok, got| {
+                    const o_idx = ~@as(u32, @truncate(ok));
+                    const o_sc: i32 = @intCast(@as(i64, @intCast(ok >> 32)) + @as(i64, std.math.minInt(i32)));
+                    if (o_idx != got.idx or o_sc != got.score) {
+                        same = false;
+                        break;
                     }
                 }
-                if (!same) {
-                    bad += 1;
-                    std.debug.print("oracle mismatch: query=\"{s}\" limit={d} cache={} tier={d} oracle_len={d} got_len={d}\n", .{ qs, limit, use_cache, res.tier_used, oracle.items.len, res.hits.items.len });
-                }
+            }
+            if (!same) {
+                bad += 1;
+                std.debug.print("oracle mismatch: query=\"{s}\" limit={d} tier={d} oracle_len={d} got_len={d}\n", .{ qs, limit, res.tier_used, oracle.items.len, res.hits.items.len });
             }
         }
     }
