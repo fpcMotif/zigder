@@ -129,6 +129,14 @@ pub fn build(b: *std.Build) void {
     test_run.has_side_effects = true;
     b.step("test", "Run zigder tests").dependOn(&test_run.step);
 
+    const test_fast = b.addTest(.{
+        .filters = filters,
+        .root_module = createAppModule(b, "zig/tests.zig", target, .fast, bench_nanoui),
+    });
+    const test_fast_run = b.addRunArtifact(test_fast);
+    test_fast_run.has_side_effects = true;
+    b.step("test-fast", "Run zigder tests in ReleaseFast").dependOn(&test_fast_run.step);
+
     const lines_exe = b.addExecutable(.{
         .name = "lines",
         .root_module = b.createModule(.{
@@ -140,4 +148,22 @@ pub fn build(b: *std.Build) void {
     const lines_run = b.addRunArtifact(lines_exe);
     lines_run.has_side_effects = true;
     b.step("lines", "Enforce 600-line limit").dependOn(&lines_run.step);
+
+    const view_loops_exe = b.addExecutable(.{
+        .name = "view-loops",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/view_loops.zig"),
+            .target = b.graph.host,
+            .optimize = .fast,
+        }),
+    });
+    const view_loops_run = b.addRunArtifact(view_loops_exe);
+    view_loops_run.has_side_effects = true;
+    b.step("view-loops", "Check view render loops for deferred mutations").dependOn(&view_loops_run.step);
+
+    const check_step = b.step("check", "Run line limit, view-loop check, Debug tests, and ReleaseFast tests");
+    check_step.dependOn(&lines_run.step);
+    check_step.dependOn(&view_loops_run.step);
+    check_step.dependOn(&test_run.step);
+    check_step.dependOn(&test_fast_run.step);
 }
