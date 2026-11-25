@@ -240,7 +240,9 @@ pub fn kindLabel(listing: *const fs_entry.FolderListing, e: fs_entry.DirEntry) [
     if (std.ascii.eqlIgnoreCase(ext, "json")) return "JSON";
     if (std.ascii.eqlIgnoreCase(ext, "toml")) return "TOML";
     if (extIn(ext, &.{ "png", "jpg", "jpeg", "gif", "webp", "svg" })) return "Image";
-    if (extIn(ext, &.{ "pdf", "txt", "doc", "docx" })) return "Text / Doc";
+    if (std.ascii.eqlIgnoreCase(ext, "pdf")) return "PDF Document";
+    if (std.ascii.eqlIgnoreCase(ext, "txt")) return "Plain Text";
+    if (extIn(ext, &.{ "doc", "docx" })) return "Word Document";
     return "Document";
 }
 
@@ -255,24 +257,82 @@ pub fn fmtBytesBuf(buf: []u8, bytes: u64) []const u8 {
     return std.fmt.bufPrint(buf, "{d:.1} GB", .{f / 1_000_000_000.0}) catch "?";
 }
 
+pub fn fmtCountBuf(buf: *[26]u8, n: u64) []const u8 {
+    var digits_buf: [20]u8 = undefined;
+    const digits = std.fmt.bufPrint(&digits_buf, "{d}", .{n}) catch unreachable;
+    var len: usize = 0;
+    for (digits, 0..) |digit, i| {
+        if (i != 0 and (digits.len - i) % 3 == 0) {
+            buf[len] = ',';
+            len += 1;
+        }
+        buf[len] = digit;
+        len += 1;
+    }
+    return buf[0..len];
+}
+
+pub fn fmtCount(c: *ui.Context, n: u64) []const u8 {
+    var buf: [26]u8 = undefined;
+    return c.alloc().dupe(u8, fmtCountBuf(&buf, n)) catch "…";
+}
+
+pub fn fmtElapsedBuf(buf: []u8, micros: u64) []const u8 {
+    if (micros < 1000) return std.fmt.bufPrint(buf, "{d} µs", .{micros}) catch "?";
+    return std.fmt.bufPrint(buf, "{d:.1} ms", .{@as(f64, @floatFromInt(micros)) / 1000.0}) catch "?";
+}
+
+pub fn fmtElapsed(c: *ui.Context, micros: u64) []const u8 {
+    var buf: [32]u8 = undefined;
+    return c.alloc().dupe(u8, fmtElapsedBuf(&buf, micros)) catch "…";
+}
+
 pub const LocalDate = struct { year: u32, month: u32, day: u32, hour: u32, minute: u32 };
 
 const month_names = [_][]const u8{ "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
 pub const Clock = enum { h12, h24 };
 
-pub fn fmtDateBuf(buf: []u8, d: LocalDate, days_ago: i64, clock: Clock) []const u8 {
-    var time_buf: [16]u8 = undefined;
+fn fmtClockBuf(buf: []u8, d: LocalDate, clock: Clock) ![]const u8 {
     const hour12: u32 = if (d.hour % 12 == 0) 12 else d.hour % 12;
     const half: []const u8 = if (d.hour < 12) "AM" else "PM";
-    const at = switch (clock) {
-        .h12 => std.fmt.bufPrint(&time_buf, "{d}:{d:0>2} {s}", .{ hour12, d.minute, half }),
-        .h24 => std.fmt.bufPrint(&time_buf, "{d:0>2}:{d:0>2}", .{ d.hour, d.minute }),
-    } catch return "--";
+    return switch (clock) {
+        .h12 => std.fmt.bufPrint(buf, "{d}:{d:0>2} {s}", .{ hour12, d.minute, half }),
+        .h24 => std.fmt.bufPrint(buf, "{d:0>2}:{d:0>2}", .{ d.hour, d.minute }),
+    };
+}
+
+pub fn fmtDateBuf(buf: []u8, d: LocalDate, days_ago: i64, clock: Clock) []const u8 {
+    var time_buf: [16]u8 = undefined;
+    const at = fmtClockBuf(&time_buf, d, clock) catch return "--";
     if (days_ago == 0) return std.fmt.bufPrint(buf, "Today at {s}", .{at}) catch "--";
     if (days_ago == 1) return std.fmt.bufPrint(buf, "Yesterday at {s}", .{at}) catch "--";
     const month = month_names[@min(d.month -| 1, 11)];
     return std.fmt.bufPrint(buf, "{s} {d}, {d} at {s}", .{ month, d.day, d.year, at }) catch "--";
+}
+
+const long_months = [_][]const u8{ "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
+const weekdays = [_][]const u8{ "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+
+pub fn fmtLongDateBuf(buf: []u8, d: LocalDate, weekday: u32, clock: Clock) []const u8 {
+    var time_buf: [16]u8 = undefined;
+    const at = fmtClockBuf(&time_buf, d, clock) catch return "--";
+    return std.fmt.bufPrint(buf, "{s}, {s} {d}, {d} at {s}", .{ weekdays[@min(weekday, 6)], long_months[@min(d.month -| 1, 11)], d.day, d.year, at }) catch "--";
+}
+
+pub fn fmtLongDate(c: *ui.Context, unix: u32) []const u8 {
+    if (unix == 0) return "--";
+    const secs: c_long = @intCast(unix);
+    var tm: Tm = undefined;
+    if (localtime_r(&secs, &tm) == null) return "--";
+    var buf: [64]u8 = undefined;
+    return c.alloc().dupe(u8, fmtLongDateBuf(&buf, .{
+        .year = @intCast(@max(tm.year + 1900, 0)),
+        .month = @intCast(tm.mon + 1),
+        .day = @intCast(tm.mday),
+        .hour = @intCast(tm.hour),
+        .minute = @intCast(tm.min),
+    }, @intCast(tm.wday), systemClock())) catch "--";
 }
 
 var system_clock: ?Clock = null;

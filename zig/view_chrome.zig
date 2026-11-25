@@ -105,13 +105,6 @@ pub fn toolbar(s: *AppState, c: *ui.Context, pal: Palette, beside_sidebar: bool)
             }
         }
 
-        if (!compact) {
-            ui.key(c, "tb-palette");
-            if (iconBtn(c, "command", "Quick Open", .{ .size = .sm }).clicked) {
-                s.openModalSearch(false);
-            }
-        }
-
         const search_w: f32 = if (compact) 136 else 240;
         {
             const sbox = ui.div(c).row().itemsCenter().gap(4);
@@ -172,11 +165,11 @@ pub fn sidebar(s: *AppState, c: *ui.Context, pal: Palette) void {
     defer foot.end();
     const total = s.engine.entry_count.load(.acquire);
     const badge_txt = if (total > 0)
-        c.print("{d} indexed", .{total})
+        c.print("{s} indexed", .{theme.fmtCount(c, total)})
     else if (s.engine.indexing.load(.acquire))
-        "Indexing disk..."
+        "Indexing…"
     else
-        "Folder mode";
+        "Not indexed";
     ui.text(c, badge_txt, .{ .size = 11, .color = pal.subtle, .tabular = true });
 }
 
@@ -272,10 +265,9 @@ pub fn bottomBars(s: *AppState, c: *ui.Context, pal: Palette) void {
         defer sbar.end();
         const style: ui.TextStyle =.{ .size = theme.size.caption, .color = pal.muted, .tabular = true };
         if (s.isSearchActive()) {
-            ui.textf(c, style, "{d} matches · {d} us · Tier {d}", .{
-                s.search_results.hits.items.len,
-                s.search_results.elapsed_us,
-                s.search_results.tier_used,
+            ui.textf(c, style, "{s} results in {s}", .{
+                theme.fmtCount(c, s.search_results.hits.items.len),
+                theme.fmtElapsed(c, s.search_results.elapsed_us),
             });
         } else {
             const rows = s.visibleRows();

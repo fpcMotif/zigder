@@ -9,6 +9,7 @@ const view_mod = @import("view.zig");
 const fs_entry = @import("fs_entry.zig");
 const theme = @import("theme.zig");
 const file_icons = @import("file_icons.zig");
+const file_preview = @import("file_preview.zig");
 
 extern "c" fn mkdtemp(template: [*:0]u8) ?[*:0]u8;
 extern "c" fn system(cmd: [*:0]const u8) c_int;
@@ -269,6 +270,23 @@ test "ui: sizes read as Finder writes them" {
     try std.testing.expectEqualStrings("205.7 GB", theme.fmtBytesBuf(&buf, 205_700_000_000));
 }
 
+test "ui: counts group digits by thousands" {
+    var buf: [26]u8 = undefined;
+    try std.testing.expectEqualStrings("0", theme.fmtCountBuf(&buf, 0));
+    try std.testing.expectEqualStrings("999", theme.fmtCountBuf(&buf, 999));
+    try std.testing.expectEqualStrings("1,000", theme.fmtCountBuf(&buf, 1000));
+    try std.testing.expectEqualStrings("2,188,690", theme.fmtCountBuf(&buf, 2_188_690));
+    try std.testing.expectEqualStrings("18,446,744,073,709,551,615", theme.fmtCountBuf(&buf, std.math.maxInt(u64)));
+}
+
+test "ui: search time reads in microseconds, then milliseconds" {
+    var buf: [32]u8 = undefined;
+    try std.testing.expectEqualStrings("0 µs", theme.fmtElapsedBuf(&buf, 0));
+    try std.testing.expectEqualStrings("412 µs", theme.fmtElapsedBuf(&buf, 412));
+    try std.testing.expectEqualStrings("1.0 ms", theme.fmtElapsedBuf(&buf, 1000));
+    try std.testing.expectEqualStrings("12.3 ms", theme.fmtElapsedBuf(&buf, 12_340));
+}
+
 test "ui: dates read as Finder writes them" {
     var buf: [48]u8 = undefined;
     const d: theme.LocalDate = .{ .year = 2026, .month = 11, .day = 24, .hour = 3, .minute = 6 };
@@ -286,6 +304,28 @@ test "ui: dates read as Finder writes them" {
     const afternoon: theme.LocalDate = .{ .year = 2026, .month = 11, .day = 24, .hour = 13, .minute = 49 };
     try std.testing.expectEqualStrings("Yesterday at 13:49", theme.fmtDateBuf(&buf, afternoon, 1, .h24));
     try std.testing.expectEqualStrings("Nov 21, 2026 at 13:49", theme.fmtDateBuf(&buf, .{ .year = 2026, .month = 11, .day = 21, .hour = 13, .minute = 49 }, 4, .h24));
+}
+
+test "ui: the preview pane writes dates as Finder does" {
+    var buf: [64]u8 = undefined;
+    const d: theme.LocalDate = .{ .year = 2026, .month = 11, .day = 2, .hour = 8, .minute = 55 };
+    try std.testing.expectEqualStrings("Monday, November 2, 2026 at 08:55", theme.fmtLongDateBuf(&buf, d, 1, .h24));
+    try std.testing.expectEqualStrings("Monday, November 2, 2026 at 8:55 AM", theme.fmtLongDateBuf(&buf, d, 1, .h12));
+}
+
+test "ui: PDF page turns stop at the first and last page" {
+    try std.testing.expectEqual(@as(u32, 1), file_preview.pageAfter(0, 3, 1));
+    try std.testing.expectEqual(@as(u32, 2), file_preview.pageAfter(2, 3, 1));
+    try std.testing.expectEqual(@as(u32, 0), file_preview.pageAfter(0, 3, -1));
+    try std.testing.expectEqual(@as(u32, 1), file_preview.pageAfter(2, 3, -1));
+    try std.testing.expectEqual(@as(u32, 0), file_preview.pageAfter(0, 0, 1));
+}
+
+test "ui: only PDFs and pictures get a rendered preview" {
+    try std.testing.expectEqual(file_preview.Kind.pdf, file_preview.kindOf("/a/Paper.PDF").?);
+    try std.testing.expectEqual(file_preview.Kind.image, file_preview.kindOf("/a/shot.png").?);
+    try std.testing.expect(file_preview.kindOf("/a/build.zig") == null);
+    try std.testing.expect(file_preview.kindOf("/a/LICENSE") == null);
 }
 
 test "ui: files of one type share an icon, folders keep their own" {

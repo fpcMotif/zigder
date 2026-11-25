@@ -42,18 +42,13 @@ fn renderPalette(s: *AppState, c: *ui.Context, pal: Palette) void {
         ui.icon(c, if (s.modal_is_go) "folder" else "magnifyingglass", .{ .size = 15, .color = pal.accent });
         ui.key(c, "modal-input");
         const tres = ui.textField(c, &s.modal_buf, .{
-            .placeholder = "Type a path (/ or ~) or search disk...",
+            .placeholder = "Search this Mac, or type a path",
             .width = .fill,
             .size = 14,
             .select_all_on_focus = true,
         });
         if (tres.changed) s.updateModalSearch();
         if (tres.submitted) s.commitModalGoOrSearch();
-        ui.key(c, "modal-close");
-        if (kit.iconButton(c, "xmark", .{ .size = .xs }).clicked) {
-            s.closeOverlay();
-            return;
-        }
     }
 
     const txt = s.modal_buf.text();
@@ -67,12 +62,11 @@ fn renderPalette(s: *AppState, c: *ui.Context, pal: Palette) void {
 
     const hits = s.modal_results.hits.items;
     if (hits.len == 0) {
-        const msg = if (txt.len == 0) "Instant search across indexed disk" else "No matches";
-        ui.text(c, msg, .{ .size = 12.5, .color = pal.muted });
+        if (txt.len > 0) ui.text(c, "No results", .{ .size = 12.5, .color = pal.muted });
         return;
     }
 
-    ui.textf(c, .{ .size = 11, .color = pal.subtle, .tabular = true }, "{d} matches in {d} us", .{ hits.len, s.modal_results.elapsed_us });
+    ui.textf(c, .{ .size = 11, .color = pal.subtle, .tabular = true }, "{s} results in {s}", .{ theme.fmtCount(c, hits.len), theme.fmtElapsed(c, s.modal_results.elapsed_us) });
     const list_h: f32 = @min(300, @as(f32, @floatFromInt(hits.len)) * 34 + 8);
     var pick_hit: ?usize = null;
     var list = ui.list(c, .{ .count = hits.len, .row_height = 32, .gap = 2, .height = .{ .px = list_h } });
@@ -148,7 +142,12 @@ fn renderDeleteConfirm(s: *AppState, c: *ui.Context, pal: Palette) void {
     defer card.end();
 
     ui.text(c, "Delete Immediately?", .{ .size = 15, .weight = .semibold, .color = pal.text });
-    ui.textf(c, .{ .size = 13, .color = pal.muted, .wrap = true }, "Delete {d} selected item(s) permanently. This cannot be undone.", .{s.delete_targets.len});
+    const style: ui.TextStyle = .{ .size = 13, .color = pal.muted, .wrap = true };
+    if (s.delete_targets.len == 1) {
+        ui.text(c, "1 item will be deleted. You can’t undo this.", style);
+    } else {
+        ui.textf(c, style, "{d} items will be deleted. You can’t undo this.", .{s.delete_targets.len});
+    }
 
     const actions = ui.div(c).row().wFull().justifyEnd().gap(8);
     defer actions.end();

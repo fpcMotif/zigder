@@ -6,7 +6,7 @@ The port keeps most of its state as row indexes, raw pointers, and flags. A relo
 
 The fixes bind each action to a name or an owned copy. They also add the missing transitions: rescan, modal overlay, and safe teardown. The 20 regression tests are in `zig/tests_state.zig`. The index file format, the search tiers, the ranking, and the view layout stay unchanged.
 
-Scope: `zig/` only. "Before" means the code as it was on 2026-11-24 before this work. Line numbers refer to the code after the fixes.
+This file covers `zig/` only. "Before" means the code as it was on 2026-11-24 before this work. Line numbers refer to the code after the fixes.
 
 ## How to read this file
 

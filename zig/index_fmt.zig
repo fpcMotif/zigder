@@ -10,7 +10,6 @@ pub const MAGIC_FSIDX: *const [8]u8 = "FSIDX012";
 pub const HDR: usize = 4096;
 
 pub const CLASSES: usize = 41;
-pub const TRIGRAM_ALPHA: usize = 40;
 pub const TRIGRAM_BUCKETS: usize = 64_000;
 pub const HEAD_BUCKETS: usize = 41;
 pub const BM_FIRST: usize = 0;
@@ -23,7 +22,6 @@ pub const NBITMAPS: usize = BM_DOUBLE + CLASSES;
 pub const ZONE: usize = 1024;
 pub const BIG_FLAG: u32 = @as(u32, 1) << 31;
 pub const ALLOC_UNIT: u64 = 4096;
-pub const SHORT_LEN: usize = 3;
 pub const BY_KEY_WANT: usize = 1 << 14;
 
 pub const NameInfo = extern struct {

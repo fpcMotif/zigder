@@ -28,7 +28,6 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
     if (rows_slice.len == 0) {
         const empty_box = ui.div(c).column().sizeFull().center().gap(6);
         defer empty_box.end();
-        ui.icon(c, theme.uiIconName("folder"), .{ .size = 28, .color = pal.subtle });
         ui.text(c, if (s.active_tag_filter != null) "No tagged items" else "Empty folder", .{ .size = 14, .color = pal.muted });
         return;
     }
@@ -151,13 +150,10 @@ pub fn renderSearch(s: *AppState, c: *ui.Context, pal: Palette) void {
     defer cols.end();
 
     {
-        const hdr = ui.div(c).row().wFull().h(32).px(12).gap(8).itemsCenter().justifyBetween().bg(pal.surface).border(pal.divider).borderW(0.5);
+        const hdr = ui.div(c).row().wFull().h(32).px(12).gap(8).itemsCenter().bg(pal.surface).border(pal.divider).borderW(0.5);
         defer hdr.end();
 
-        ui.textf(c, .{ .size = 12, .weight = .medium, .color = pal.text, .tabular = true }, "{d} results in {d} us", .{
-            s.search_results.hits.items.len,
-            s.search_results.elapsed_us,
-        });
+        ui.text(c, "Search:", .{ .size = 12, .color = pal.muted });
 
         const scope_row = ui.div(c).row().gap(4).itemsCenter();
         defer scope_row.end();
@@ -187,8 +183,7 @@ pub fn renderSearch(s: *AppState, c: *ui.Context, pal: Palette) void {
     if (hits.len == 0) {
         const empty_box = ui.div(c).column().sizeFull().center().gap(6);
         defer empty_box.end();
-        ui.icon(c, "magnifyingglass", .{ .size = 28, .color = pal.subtle });
-        ui.text(c, if (s.engine.ready.load(.acquire)) "No matching files" else "Index loading...", .{ .size = 14, .color = pal.muted });
+        ui.text(c, if (s.engine.ready.load(.acquire)) "No results" else "Indexing…", .{ .size = 14, .color = pal.muted });
         return;
     }
 

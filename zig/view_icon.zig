@@ -15,7 +15,6 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
     if (rows_slice.len == 0) {
         const empty_box = ui.div(c).column().sizeFull().center().gap(6);
         defer empty_box.end();
-        ui.icon(c, theme.uiIconName("folder"), .{ .size = 32, .color = pal.subtle });
         ui.text(c, "Empty folder", .{ .size = 14, .color = pal.muted });
         return;
     }

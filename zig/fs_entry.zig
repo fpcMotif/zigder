@@ -294,10 +294,6 @@ pub fn naturalCmp(a: []const u8, b: []const u8) std.math.Order {
             const la = std.ascii.toLower(ca);
             const lb = std.ascii.toLower(cb);
             if (la != lb) return std.math.order(la, lb);
-            if (ca != cb) {
-                const tie = std.math.order(ca, cb);
-                _ = tie;
-            }
             ia += 1;
             ib += 1;
         }

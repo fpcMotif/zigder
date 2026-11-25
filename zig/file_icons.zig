@@ -15,7 +15,9 @@ extern "c" fn CGContextRelease(ctx: *anyopaque) void;
 const gpa = std.heap.smp_allocator;
 const small_side: u32 = 32;
 const large_side: u32 = 128;
+const huge_side: u32 = 256;
 const small_max_pt: f32 = 20;
+const large_max_pt: f32 = 64;
 const live_bytes_max: usize = 24 * 1024 * 1024;
 const premultiplied_bgra: u32 = 2 | (2 << 12);
 
@@ -64,7 +66,7 @@ fn symbol(c: *ui.Context, pt: f32, spec: theme.IconSpec, tint: ?ui.Color) void {
 
 fn show(c: *ui.Context, full: []const u8, container: bool, pt: f32) bool {
     if (comptime ui.portable) return false;
-    const side: u32 = if (pt <= small_max_pt) small_side else large_side;
+    const side: u32 = if (pt <= small_max_pt) small_side else if (pt <= large_max_pt) large_side else huge_side;
     const key = cacheKey(full, container) ^ side;
     const bgra = pixels(key, full, side) orelse return false;
     return ui.image(c, .{

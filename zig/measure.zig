@@ -84,18 +84,6 @@ pub fn nanos() u64 {
     return @intCast((@as(u128, mach_absolute_time()) * tb[0]) / tb[1]);
 }
 
-pub fn micros() f64 {
-    return @as(f64, @floatFromInt(nanos())) / 1000.0;
-}
-
-pub fn sinceStart() f64 {
-    var r: RusageV4 = undefined;
-    if (proc_pid_rusage(getpid(), RUSAGE_INFO_V4, &r) != 0) return std.math.inf(f64);
-    const tb = timebase();
-    const ticks: f64 = @floatFromInt(mach_absolute_time() -| r.proc_start_abstime);
-    return ticks * @as(f64, @floatFromInt(tb[0])) / @as(f64, @floatFromInt(tb[1])) / 1e6;
-}
-
 pub const Stats = struct {
     min: f64,
     p50: f64,
