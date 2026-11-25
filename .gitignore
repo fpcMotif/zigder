@@ -1,4 +1,5 @@
 /target
+/ref/rust/target
 /shots
 /dist
 /.wip
@@ -6,4 +7,5 @@
 .zig-cache/
 zig-out/
 zig-pkg/
+codedb.snapshot
 

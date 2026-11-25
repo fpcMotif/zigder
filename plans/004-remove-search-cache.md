@@ -1,17 +1,17 @@
 # Plan 004: Inline search no longer uses `SearchCache`
 
-> **Executor instructions**: Follow this plan step by step. Run every
+> **Executor instructions.** Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report. Do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
->
-> **Drift check (run first)**: `zig/` is not tracked by git, so use hashes.
+
+> **Drift check.** Git does not track `zig/` yet, so use hashes.
 > Run `shasum -a 256 zig/search.zig zig/engine.zig zig/app.zig zig/cli.zig | cut -c1-12`.
 > Expected: `da92c5a92c6c`, `ff48be225ab6`, `fca0cb727be3`, `bf9a01c5d5b5`.
-> `zig/search_bitmap.zig`, `zig/tests.zig`, and `zig/bench.zig` were changed
-> by plans 002 and 003. For all files, compare the "Current state" excerpts
-> with the live code. On a mismatch, STOP.
+
+> Plans 002 and 003 changed `zig/search_bitmap.zig`, `zig/tests.zig`, and `zig/bench.zig`.
+> Compare the "Current state" excerpts with the live code, and STOP on a mismatch.
 
 ## Status
 
@@ -20,15 +20,15 @@
 - **Risk**: MED
 - **Depends on**: plans/002-big-index-oracle-and-name-score-fix.md, plans/003-bench-app-real-search.md
 - **Category**: perf
-- **Planned at**: commit `63a384c` (`zig/` is untracked), 2026-11-24
+- **Planned at**: commit `63a384c` (before git tracked `zig/`), 2026-11-24
 
 ## Why this matters
 
 `SearchCache` keeps the matched name ids of the last one-word query, so the
-next keystroke can filter that list. It was measured on a 2,076,700-entry
-index with the app's limit of 200. It made every measured keystroke slower,
-and one cached one-letter query raised the process footprint from 2.55 MB to
-22.95 MB for the rest of the session.
+next keystroke can filter that list. We measured it on a 2,076,700-entry
+index at the app limit of 200. It slowed every measured keystroke. One cached
+one-letter query also raised the process footprint from 2.55 MB to 22.95 MB
+for the rest of the session.
 
 | Keystroke | With cache (p50) | Without cache (p50) |
 |-----------|------------------|---------------------|
@@ -42,7 +42,7 @@ and one cached one-letter query raised the process footprint from 2.55 MB to
 | `con` | 2,950 µs | 2,009 µs |
 | `nanoui` | 2,221 µs | 865 µs |
 
-Cause: when a cache is passed, the search turns off its "seed floor" (an
+Cause: when a caller passes a cache, the search turns off its "seed floor" (an
 early score bound that lets the scan skip most names). It then collects and
 sorts the full match list. A list over 16,384 names is not stored, so the
 work is thrown away. The scan buffers keep their peak size. Removing the cache
@@ -235,7 +235,7 @@ The search returns a "tier" number in `SearchResults.tier_used`. Tier 0 meant
 - `zig/tests_state.zig` (three call sites only)
 
 **Out of scope** (do NOT touch):
-- `zig/live.zig`, including the `epoch` field. Another session added it.
+- `zig/live.zig` and its `epoch` field. Another session added it.
   Leave it even if nothing reads it after this plan. Report it.
 - `zig/STATE_MACHINES.md`. This repository locks Markdown outside docs work.
   Report the stale lines 77 and 283 and the "Issue 4" row. Do not edit them.
@@ -243,7 +243,7 @@ The search returns a "tier" number in `SearchResults.tier_used`. Tier 0 meant
 
 ## Git workflow
 
-- Do not commit, stage, or push. `zig/` is untracked.
+- Do not commit, stage, or push. Git does not track `zig/` yet.
 
 ## Steps
 
@@ -308,9 +308,9 @@ The search returns a "tier" number in `SearchResults.tier_used`. Tier 0 meant
   `search_mod.search` call to four arguments. In the summary line, rename the
   label `keystroke_cached_us` to `keystroke_us`.
 
-**Verify**: `mise exec -- zig build test` → exit 0.
+**Verify**: `mise exec -- zig build test` must exit 0.
 
-**Verify**: `mise exec -- zig build test -Dtest-filter="oracle"` → exit 0, no `oracle mismatch` line.
+**Verify**: `mise exec -- zig build test -Dtest-filter="oracle"` must exit 0, no `oracle mismatch` line.
 
 ### Step 4: Confirm nothing refers to the cache
 
@@ -319,7 +319,7 @@ and `collect_cache`.
 
 **Verify**: the only matches are in `zig/STATE_MACHINES.md`.
 
-**Verify**: `mise exec -- zig build lines` → `N files, all within 600 lines`.
+**Verify**: `mise exec -- zig build lines` must print `N files, all within 600 lines`.
 
 ### Step 5: Measure
 
@@ -335,8 +335,7 @@ tables in your report.
 - No new test. The two oracle tests (`zig/tests.zig` and
   `zig/tests_search.zig`) compare every query with the reference search.
   They must pass before and after.
-- The `use_cache` dimension of `zig/tests_search.zig` is removed with the
-  feature it tested.
+- Step 3 removes the `use_cache` loop from `zig/tests_search.zig` along with the cache.
 
 ## Done criteria
 
@@ -359,9 +358,9 @@ tables in your report.
 
 ## Maintenance notes
 
-- If keystroke narrowing is wanted later, it must keep the seed floor active
-  and must release its buffers. Measure it against the uncached numbers in
+- If a future change adds keystroke narrowing, it must keep the seed floor
+  active and release its buffers. Measure it against the uncached numbers in
   this plan first.
-- `Live.epoch` in `zig/live.zig` was added for this cache. After this plan it
-  has no reader in the search. The owner of `zig/live.zig` can remove it.
+- An earlier change added `Live.epoch` in `zig/live.zig` for this cache. After
+  this plan nothing in search reads it. The owner of `zig/live.zig` can remove it.
 - `tier_used == 0` no longer occurs. The bench prints tiers as `T1`, `T2`.

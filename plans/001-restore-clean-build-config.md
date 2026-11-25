@@ -1,12 +1,12 @@
 # Plan 001: `zig build lines` and `zig build bench` configure from a clean cache
 
-> **Executor instructions**: Follow this plan step by step. Run every
+> **Executor instructions.** Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report. Do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
->
-> **Drift check (run first)**: `build.zig` is not tracked by git, so use a hash.
+
+> **Drift check.** Git does not track `build.zig` yet, so use a hash.
 > Run `shasum -a 256 build.zig | cut -c1-12`. Expected: `c39bb0df26d3`.
 > On a different value, compare the "Current state" excerpts with the live
 > file. On a mismatch, treat it as a STOP condition.
@@ -18,7 +18,7 @@
 - **Risk**: LOW
 - **Depends on**: none
 - **Category**: dx
-- **Planned at**: commit `63a384c` (the files `build.zig`, `zig/`, `tools/` are untracked), 2026-11-24
+- **Planned at**: commit `63a384c` (before git tracked `build.zig`, `zig/`, and `tools/`), 2026-11-24
 
 ## Why this matters
 
@@ -58,13 +58,13 @@ build.zig:56:34: error: no field named 'ReleaseFast' in enum 'lang.Optimize'
 ```
 
 Cause: in Zig 0.17.0 the enum `std.builtin.OptimizeMode` has the fields
-`debug`, `safe`, `fast`, `small`. The names `Debug` and `ReleaseFast` are
-deprecated declarations. A declaration name resolves only where the
+`debug`, `safe`, `fast`, `small`. Zig 0.17.0 deprecates the declaration names `Debug` and `ReleaseFast`.
+A declaration name resolves only where the
 expression has a known result type. `orelse` and `==` give no result type
 here. The other uses in the file (`.optimize = .ReleaseFast` at lines 104 and
 137, and the argument at line 109) have a result type and compile.
 
-The fix below was compiled in a scratch copy of the repository on 2026-11-24.
+A scratch copy of the repository compiled the fix below on 2026-11-24.
 It listed the steps `run`, `bench`, `test`, `lines`. `zig build lines` printed
 `43 files, all within 600 lines`. `zig build test` exited 0.
 
@@ -78,18 +78,17 @@ It listed the steps `run`, `bench`, `test`, `lines`. `zig build lines` printed
 
 ## Scope
 
-**In scope** (the only file you may modify):
+**In scope:**
 - `build.zig`
 
 **Out of scope** (do NOT touch):
 - `build_state_tmp.zig`. It belongs to another work session.
-- `.zig-cache/`. Do not delete it. Another session may be building.
+- `.zig-cache/`. Do not delete it. Another session can be building.
 - Every file under `zig/` and `tools/`.
 
 ## Git workflow
 
-- Do not commit, stage, or push. `build.zig` is untracked and the operator
-  decides when the Zig port enters git.
+- Do not commit, stage, or push. Git does not track `build.zig` yet, and the operator decides when the Zig port enters git.
 - The repository commit style is conventional commits, for example
   `fix(founder): hold the preview width to what its divider allows`.
 
@@ -112,7 +111,7 @@ In `build.zig`, replace line 99 with:
     const bench_nanoui = if (app_optimize == .fast)
 ```
 
-**Verify**: `mise exec -- zig build -l` → the list contains `bench`, `test`, and `lines`.
+**Verify**: `mise exec -- zig build -l` must list `bench`, `test`, and `lines`.
 
 If the list still shows only `test`, `app`, and `cli`, the default cache is
 stale. Run `mise exec -- zig build -l --cache-dir /tmp/zigder-plan-cache`.
@@ -122,9 +121,9 @@ in your final message and add `--cache-dir /tmp/zigder-plan-cache` to every
 
 ### Step 3: Run the line check and the tests
 
-**Verify**: `mise exec -- zig build lines` → prints `N files, all within 600 lines`, exit 0.
+**Verify**: `mise exec -- zig build lines` must print `N files, all within 600 lines` and exit 0.
 
-**Verify**: `mise exec -- zig build test` → exit 0.
+**Verify**: `mise exec -- zig build test` must exit 0.
 
 ## Test plan
 
@@ -148,7 +147,7 @@ No new tests. The build steps are the check.
 
 ## Maintenance notes
 
-- The deprecated names `Debug`, `ReleaseFast` are removed after Zig 0.18. The
+- Zig 0.18 removes the deprecated names `Debug` and `ReleaseFast`. The
   remaining uses at `build.zig:104`, `:109`, `:137` will then need `.fast`.
 - `zig build bench` rewrites the index file at
   `~/Library/Caches/zigder/index.zidx` when it converts the index. This is

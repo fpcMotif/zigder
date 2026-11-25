@@ -1,0 +1,464 @@
+<doc>
+  <h1 id="Y68jwUaq">Zigder Codebase Architecture &amp; Performance Roadmap</h1>
+  <alert id="mM9XJN9_" type="note">
+    <p>Dual-stack macOS Finder repository at commit <code>7c155cf</code>: Rust <b>NativeGPUI</b> (<code>src/</code>) and <b>Found&apos;er</b> (<code>founder/</code>) alongside the pure-Zig port (<code>zig/</code>, entered git at <code>c78fdf0</code>, built on <code>nanoui</code>).</p>
+  </alert>
+  <h2 id="nSSgnpX5">System Architecture</h2>
+  <p id="NJwEgaNz"><ref whiteboard="zigder-architecture" to="jvkngvYcbzLkM0fHIrocp" frame="f-system" embed="true" /></p>
+  <p id="0-5eImpX">Inspect both the runtime pipeline and the dual-stack footprint comparison on the live canvas: <ref whiteboard="zigder-architecture" to="jvkngvYcbzLkM0fHIrocp">Open full architecture whiteboard</ref>.</p>
+  <h2 id="L1XsSbfS">Codebase Footprint</h2>
+  <chart id="N11nurND"><![CDATA[{
+    "version": 1,
+    "type": "bar",
+    "title": "Repository Footprint by Stack (LOC)",
+    "x": "stack",
+    "series": [
+      { "key": "loc", "label": "Lines of Code" }
+    ],
+    "data": [
+      { "stack": "Found'er (Rust)", "loc": 72543 },
+      { "stack": "NativeGPUI (Rust)", "loc": 18042 },
+      { "stack": "Zigder Port (Zig)", "loc": 12957 }
+    ],
+    "format": { "compact": true },
+    "source": "Workspace file counts at commit 7c155cf"
+  }]]></chart>
+  <chart id="joT70Iko"><![CDATA[{
+    "version": 1,
+    "type": "pie",
+    "donut": true,
+    "title": "Zig Port Breakdown by Subsystem (12,957 LOC)",
+    "x": "subsystem",
+    "series": [
+      { "key": "loc", "label": "Zig LOC" }
+    ],
+    "data": [
+      { "subsystem": "Engine & Index", "loc": 4216 },
+      { "subsystem": "Search Pipeline", "loc": 2814 },
+      { "subsystem": "App & File Ops", "loc": 2354 },
+      { "subsystem": "Views & Chrome", "loc": 1841 },
+      { "subsystem": "Tests & Bench", "loc": 1732 }
+    ],
+    "format": { "compact": true },
+    "source": "40 Zig source files under zig/"
+  }]]></chart>
+  <table id="A9pHXgNy">
+    <tr>
+      <th>
+        <p>Area</p>
+      </th>
+      <th>
+        <p>Files</p>
+      </th>
+      <th>
+        <p>LOC</p>
+      </th>
+      <th>
+        <p>Key Files &amp; Role</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p><code>founder/</code> (Rust)</p>
+      </td>
+      <td>
+        <p>164</p>
+      </td>
+      <td>
+        <p>72,543</p>
+      </td>
+      <td>
+        <p>Original Found&apos;er macOS app and <code>fsearch</code> reference engine</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>src/</code> (Rust)</p>
+      </td>
+      <td>
+        <p>42</p>
+      </td>
+      <td>
+        <p>18,042</p>
+      </td>
+      <td>
+        <p>NativeGPUI AppKit controls, window chrome, liquid glass, Quick Look</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>zig/</code> Engine &amp; Index</p>
+      </td>
+      <td>
+        <p>9</p>
+      </td>
+      <td>
+        <p>4,216</p>
+      </td>
+      <td>
+        <p><code>engine.zig</code>, <code>walk.zig</code>, <code>fsevents.zig</code>, <code>live.zig</code>, <code>index_*.zig</code></p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>zig/</code> Search Pipeline</p>
+      </td>
+      <td>
+        <p>6</p>
+      </td>
+      <td>
+        <p>2,814</p>
+      </td>
+      <td>
+        <p><code>search.zig</code>, <code>search_bitmap.zig</code>, <code>search_nfa.zig</code>, <code>query.zig</code>, <code>fuzzy_simd.zig</code></p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>zig/</code> App &amp; File Ops</p>
+      </td>
+      <td>
+        <p>8</p>
+      </td>
+      <td>
+        <p>2,354</p>
+      </td>
+      <td>
+        <p><code>app.zig</code>, <code>app_ops.zig</code>, <code>app_sel.zig</code>, <code>fs_ops.zig</code>, <code>volumes.zig</code>, <code>cli.zig</code></p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>zig/</code> Views &amp; Chrome</p>
+      </td>
+      <td>
+        <p>12</p>
+      </td>
+      <td>
+        <p>1,841</p>
+      </td>
+      <td>
+        <p><code>view*.zig</code> (list, icon, column, gallery, inspector, overlays), <code>menus.zig</code>, <code>quicklook.zig</code></p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>zig/</code> Tests &amp; Bench</p>
+      </td>
+      <td>
+        <p>5</p>
+      </td>
+      <td>
+        <p>1,732</p>
+      </td>
+      <td>
+        <p><code>tests.zig</code>, <code>tests_state.zig</code>, <code>tests_ui.zig</code>, <code>bench.zig</code>, <code>measure.zig</code></p>
+      </td>
+    </tr>
+  </table>
+  <h2 id="pIRl29O4">Measured Search Bottlenecks (2.08M Entries)</h2>
+  <p id="7TFiYoAj">Measurements from <code>plans/README.md</code> on a <b>2,076,700-entry</b> index (<code>ReleaseFast</code>, app limit 200) identify three main bottlenecks: per-entry path reconstruction on multi-word queries, <code>SearchCache</code> suppressing the seed floor, and discarded trigram floor hints.</p>
+  <chart id="rrdVCEI3"><![CDATA[{
+    "version": 1,
+    "type": "bar",
+    "title": "Search Latency: Baseline vs Prototype (ms)",
+    "subtitle": "2,076,700 entries, ReleaseFast, limit 200",
+    "x": "query",
+    "series": [
+      { "key": "baseline_ms", "label": "Baseline (ms)" },
+      { "key": "prototype_ms", "label": "Prototype (ms)" }
+    ],
+    "highlight": "prototype_ms",
+    "refs": [
+      { "y": 16.67, "label": "60fps frame (16.7ms)" }
+    ],
+    "data": [
+      { "query": "src main", "baseline_ms": 92, "prototype_ms": 11.7 },
+      { "query": "a e", "baseline_ms": 384, "prototype_ms": 36 },
+      { "query": "test spec ts", "baseline_ms": 226, "prototype_ms": 24 },
+      { "query": "nan", "baseline_ms": 4.75, "prototype_ms": 0.37 },
+      { "query": "nano", "baseline_ms": 2.44, "prototype_ms": 0.19 }
+    ],
+    "format": { "unit": "ms", "decimals": 2 },
+    "source": "plans/README.md (2026-11-24)"
+  }]]></chart>
+  <details id="vCHjOnEj" summary="SearchCache &amp; Scoped-Search Evidence" open="false">
+    <ul>
+      <li><b>SearchCache penalty:</b> Query <code>n</code> at limit 200 took <code>15,286 µs</code> cached versus <code>226 µs</code> uncached, while footprint jumped from <code>2.55 MB</code> to <code>22.95 MB</code> after one cached query.</li>
+      <li><b>Scoped one-word ranking bug:</b> Query <code>in:~/devv/zigder e</code> returned <code>50 of 50</code> wrong results (6 mismatches reproduced by Plan 002&apos;s test) because scoped one-word search dropped the name score.</li>
+      <li><b>Multi-word path building:</b> Rebuilding full paths per entry drove <code>a e</code> to <code>384 ms</code>, <code>test spec ts</code> to <code>226 ms</code>, and <code>src main</code> to <code>92 ms</code>; directory memoization cut them to <code>36 ms</code>, <code>24 ms</code>, and <code>11.7 ms</code> with zero oracle mismatches.</li>
+    </ul>
+  </details>
+  <h2 id="odS1tyJo">Engine Worker State Machine &amp; Open Hazards</h2>
+  <p id="dV38DoYk"><code>zig/STATE_MACHINES.md</code> documents 13 state machines and 7 resolved issue clusters backed by 20 regression tests in <code>zig/tests_state.zig</code> (all 27 suite tests passing on 2026-11-24). The diagram below models the <b>background index-worker lifecycle</b> on <code>Engine</code> in <code>zig/engine.zig</code> (loading or scanning the filesystem index, swapping <code>Live</code>, starting FSEvents, and draining on shutdown):</p>
+  <mermaid id="J2Q-YXBq">stateDiagram-v2
+    [*] --&gt; Idle
+    Idle --&gt; Building: startAsync
+    Building --&gt; Ready: index attached
+    Building --&gt; Idle: no index and no scan root
+    Ready --&gt; Building: rescan requested
+    Building --&gt; Building: rescan requested while a build runs
+    Ready --&gt; Stopped: stop
+    Building --&gt; Stopped: stop (waits for the build)
+    Idle --&gt; Stopped: stop</mermaid>
+  <table id="o6hAp7s2">
+    <tr>
+      <th>
+        <p>State</p>
+      </th>
+      <th>
+        <p>Engine Fields</p>
+      </th>
+      <th>
+        <p>What It Describes (<code>zig/engine.zig</code>)</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p><b>Idle</b></p>
+      </td>
+      <td>
+        <p><code>indexing=false</code>, <code>live=null</code>, <code>worker=null</code></p>
+      </td>
+      <td>
+        <p>Before <code>startAsync</code> runs, or when index load fails and <code>scan_root</code> is null.</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><b>Building</b></p>
+      </td>
+      <td>
+        <p><code>indexing=true</code>, <code>worker</code> running</p>
+      </td>
+      <td>
+        <p><code>workerMain</code> loads <code>zidx_path</code>, converts <code>founder_path</code>, or runs <code>walk.scan</code>; <code>rescan_wanted</code> loops another pass if requested mid-build.</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><b>Ready</b></p>
+      </td>
+      <td>
+        <p><code>indexing=false</code>, <code>ready=true</code>, <code>live</code> set</p>
+      </td>
+      <td>
+        <p><code>attachLive</code> swaps in the new <code>Live</code> snapshot, starts <code>fsevents.watch</code>, increments <code>generation</code>, and wakes the UI.</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><b>Stopped</b></p>
+      </td>
+      <td>
+        <p><code>stopping=true</code>, threads joined</p>
+      </td>
+      <td>
+        <p><code>stop()</code> clears <code>waker_win</code>, drains and destroys the FSEvents stream, joins worker threads, and <code>deinit()</code> frees <code>live</code>.</p>
+      </td>
+    </tr>
+  </table>
+  <table id="HW38LDk1">
+    <tr>
+      <th>
+        <p>Fixed Issue Cluster</p>
+      </th>
+      <th>
+        <p>Findings</p>
+      </th>
+      <th>
+        <p>Resolution Summary</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p>1. File actions hit wrong item</p>
+      </td>
+      <td>
+        <p>A1–A7</p>
+      </td>
+      <td>
+        <p>Reload and sort follow entries by name or id (<code>app_sel.zig</code>); rename stores name; delete dialog owns targets; modal overlays block background shortcuts.</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>2. Undo and redo destroy data</p>
+      </td>
+      <td>
+        <p>B1–B3</p>
+      </td>
+      <td>
+        <p>Exclusive rename (<code>RENAME_EXCL</code>), existence check before copy fallback, non-recursive undo of creations, toast on failure.</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>3. Navigation leaves wrong tab state</p>
+      </td>
+      <td>
+        <p>C1–C6</p>
+      </td>
+      <td>
+        <p><code>navigateTo</code> owns its path copy; history updates only on open; <code>closeTab</code> shifts active index; missing folder falls back to parent.</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>4. Index never recovers from lost events</p>
+      </td>
+      <td>
+        <p>D1, D2</p>
+      </td>
+      <td>
+        <p><code>applyEvents</code> triggers rescan; worker swaps index and restarts stream; <code>SearchCache</code> keys on <code>Live</code> epoch.</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>5. Teardown uses freed objects</p>
+      </td>
+      <td>
+        <p>E1–E3</p>
+      </td>
+      <td>
+        <p><code>Stream.destroy</code> drains serial queue; <code>on_close</code> clears window pointers; thread handles change under lock.</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>6. Overlay slots grow unbounded</p>
+      </td>
+      <td>
+        <p>F1</p>
+      </td>
+      <td>
+        <p>Dead slots stay in <code>overlay_map</code> and are revived for repeated paths (see open hazard H4 for temporary names).</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>7. Search highlight jumps on refresh</p>
+      </td>
+      <td>
+        <p>G1</p>
+      </td>
+      <td>
+        <p><code>onIndexChanged</code> restores <code>search_cursor</code> by path.</p>
+      </td>
+    </tr>
+  </table>
+  <table id="eDRqNHcr">
+    <tr>
+      <th>
+        <p>Hazard</p>
+      </th>
+      <th>
+        <p>Risk</p>
+      </th>
+      <th>
+        <p>Status</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p><code>H1</code></p>
+      </td>
+      <td>
+        <p><code>walk.scan</code> has no cancel flag; quit during first scan waits until scan ends.</p>
+      </td>
+      <td>
+        <p>Open (By reading)</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>H2</code></p>
+      </td>
+      <td>
+        <p><code>Engine.mutex</code> is held during disk I/O (<code>loadFolder</code>, <code>addSubtree</code>), risking UI stalls.</p>
+      </td>
+      <td>
+        <p>Open (By reading)</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>H3</code></p>
+      </td>
+      <td>
+        <p>Every dropped-event flag triggers a full scan instead of replaying the gap up to 3 times.</p>
+      </td>
+      <td>
+        <p>Open (By reading)</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>H4</code></p>
+      </td>
+      <td>
+        <p>Live overlay never compacts back to the index file on disk.</p>
+      </td>
+      <td>
+        <p>Open (By reading)</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>H5</code></p>
+      </td>
+      <td>
+        <p>Quick Look keeps initial targets while visible (<code>QuickLook.updateIfVisible</code> unused).</p>
+      </td>
+      <td>
+        <p>Open (By reading)</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>H11</code></p>
+      </td>
+      <td>
+        <p>Native menu and <code>handleShortcuts</code> bind the same keys, risking double-fired actions.</p>
+      </td>
+      <td>
+        <p>Open (Not verified)</p>
+      </td>
+    </tr>
+  </table>
+  <h2 id="GwBkUSuW">Search Optimization Roadmap (Plans 001–006)</h2>
+  <p id="37sNXr29">Plans in <code>plans/README.md</code> run in dependency order. Plan 001 is already resolved at <code>c78fdf0</code>; Plans 004 and 005 both modify <code>zig/search_bitmap.zig</code> and must execute sequentially.</p>
+  <steps id="80h1Icwm">
+    <step id="s_4r6ql9d1" title="Restore clean-cache build targets (Plan 001)">
+      <p>Resolved independently at <code>c78fdf0</code>: <code>build.zig</code> configures <code>lines</code> and <code>bench</code> from a clean cache.</p>
+    </step>
+    <step id="s_7w6zc0te" title="Add large-index oracle test and fix scoped name score (Plan 002)">
+      <p>Add a correctness oracle reaching above 60,000 matches and restore name scoring for scoped one-word queries (depends on 001).</p>
+    </step>
+    <step id="s_79clveew" title="Align bench harness with app search (Plan 003)">
+      <p>Update <code>zig/bench.zig</code> to model limit 200 and multi-word queries matching <code>zig/app.zig</code> (depends on 001).</p>
+    </step>
+    <step id="s_qv6mr0qt" title="Remove SearchCache from inline search (Plan 004)">
+      <p>Drop cached full-list collection on inline queries, removing the 20 MB footprint jump and 15 ms cached keystroke spike (depends on 002, 003).</p>
+    </step>
+    <step id="s_lnvrzdme" title="Memoize folder scoring in multi-word search (Plan 005)">
+      <p>Cache directory scores per folder in <code>zig/search_bitmap.zig</code> rather than rebuilding paths per entry; must run sequentially after Plan 004 (depends on 002, 003).</p>
+    </step>
+    <step id="s_pa9nfi3m" title="Reuse trigram score floor in fuzzy search (Plan 006)">
+      <p>Pass the trigram pass&apos;s floor into one-word fuzzy scoring and extend test coverage so the Step 4 mutation guard fails when disabled (depends on 002, 003, 004).</p>
+    </step>
+  </steps>
+  <ul id="KaPZpSiM" type="check">
+    <li checked="true">Plan 001: Configure <code>zig build lines</code> and <code>zig build bench</code> from clean cache (fixed at <code>c78fdf0</code>)</li>
+    <li checked="false">Plan 002: Large-index oracle test and scoped one-word name scoring</li>
+    <li checked="false">Plan 003: Match bench output and limits (200 hits, multi-word) to app search</li>
+    <li checked="false">Plan 004: Remove <code>SearchCache</code> from inline search (sequential with 005)</li>
+    <li checked="false">Plan 005: Memoize folder scoring for multi-word queries in <code>zig/search_bitmap.zig</code></li>
+    <li checked="false">Plan 006: Reuse trigram score floor in fuzzy one-word search</li>
+  </ul>
+  <h2 id="Q7gAp1Wy">Interactive Decision (Try Ryugi Controls)</h2>
+  <p id="Yk8q8Y2n">Select the next engineering track to prioritize: <ask id="next-roadmap-track" recommend="search-plans"><option value="search-plans">Execute Plans 002–006 (Search speed &amp; memory)</option><option value="engine-hazards">Fix Open Hazards H1–H4 (Cancelable scan, lock I/O, compact)</option><option value="async-search">Move inline search off the UI thread</option></ask></p>
+  <p id="oT66rU3O">Additional direction or subsystem to inspect: <ask id="showcase-notes" placeholder="Leave a comment or pick a subsystem to inspect next" /></p>
+</doc>
+

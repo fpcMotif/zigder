@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const limit = 600;
-const roots = [_][]const u8{ "build.zig", "tools", "zig" };
+const roots = [_][]const u8{ "build.zig", "tools", "src" };
 const skip = [_][]const u8{ ".zig-cache", "zig-out", "zig-pkg", ".git" };
 
 pub fn main(init: std.process.Init) !void {

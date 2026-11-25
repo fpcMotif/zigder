@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "modules": [
+    {
+      "id": "native-gpui",
+      "name": "NativeGPUI",
+      "description": "AppKit controls, window chrome, liquid glass, menus, and Quick Look bridge over GPUI.",
+      "paths": ["ref/rust/**"],
+      "aliases": []
+    },
+    {
+      "id": "founder-app",
+      "name": "Found'er (Rust)",
+      "description": "Original Rust Finder replacement and fsearch reference engine.",
+      "paths": ["founder/**"],
+      "aliases": []
+    },
+    {
+      "id": "zig-engine",
+      "name": "Zig Index & Live Engine",
+      "description": "Disk walker, binary index format, FSEvents watcher, TCC gates, and live overlay.",
+      "paths": ["src/index/**"],
+      "aliases": []
+    },
+    {
+      "id": "zig-search",
+      "name": "Zig Search Pipeline",
+      "description": "Query parser, trigram/bitmap/NFA matching, SIMD fuzzy scoring, directory memo, and benchmarks.",
+      "paths": ["src/search/**", "src/bench.zig", "src/measure.zig", "plans/**"],
+      "aliases": []
+    },
+    {
+      "id": "zig-ui",
+      "name": "Zig App & NanoUI Views",
+      "description": "Tab/selection/undo state machines, file ops, menus, CLI, tests, and list/icon/column/gallery views.",
+      "paths": ["src/app/**", "src/fs/**", "src/ui/**", "src/main.zig", "src/cli.zig", "src/tests.zig", "src/tests/**"],
+      "aliases": []
+    }
+  ]
+}

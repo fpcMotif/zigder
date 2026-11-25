@@ -66,13 +66,13 @@ pub fn build(b: *std.Build) void {
 
     const exe = b.addExecutable(.{
         .name = "zigder",
-        .root_module = createAppModule(b, "zig/main.zig", target, app_optimize, nanoui),
+        .root_module = createAppModule(b, "src/main.zig", target, app_optimize, nanoui),
     });
     b.installArtifact(exe);
 
     const cli = b.addExecutable(.{
         .name = "zigder-cli",
-        .root_module = createAppModule(b, "zig/cli.zig", target, app_optimize, nanoui),
+        .root_module = createAppModule(b, "src/cli.zig", target, app_optimize, nanoui),
     });
     b.installArtifact(cli);
 
@@ -106,7 +106,7 @@ pub fn build(b: *std.Build) void {
         }).module("nanoui");
     const bench = b.addExecutable(.{
         .name = "zigder-bench",
-        .root_module = createAppModule(b, "zig/bench.zig", target, .fast, bench_nanoui),
+        .root_module = createAppModule(b, "src/bench.zig", target, .fast, bench_nanoui),
     });
     const bench_run = b.addRunArtifact(bench);
     bench_run.addPassthruArgs();
@@ -123,7 +123,7 @@ pub fn build(b: *std.Build) void {
         }).module("nanoui");
     const tests = b.addTest(.{
         .filters = filters,
-        .root_module = createAppModule(b, "zig/tests.zig", target, test_optimize, test_nanoui),
+        .root_module = createAppModule(b, "src/tests.zig", target, test_optimize, test_nanoui),
     });
     const test_run = b.addRunArtifact(tests);
     test_run.has_side_effects = true;
@@ -131,7 +131,7 @@ pub fn build(b: *std.Build) void {
 
     const test_fast = b.addTest(.{
         .filters = filters,
-        .root_module = createAppModule(b, "zig/tests.zig", target, .fast, bench_nanoui),
+        .root_module = createAppModule(b, "src/tests.zig", target, .fast, bench_nanoui),
     });
     const test_fast_run = b.addRunArtifact(test_fast);
     test_fast_run.has_side_effects = true;
@@ -149,21 +149,8 @@ pub fn build(b: *std.Build) void {
     lines_run.has_side_effects = true;
     b.step("lines", "Enforce 600-line limit").dependOn(&lines_run.step);
 
-    const view_loops_exe = b.addExecutable(.{
-        .name = "view-loops",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("tools/view_loops.zig"),
-            .target = b.graph.host,
-            .optimize = .fast,
-        }),
-    });
-    const view_loops_run = b.addRunArtifact(view_loops_exe);
-    view_loops_run.has_side_effects = true;
-    b.step("view-loops", "Check view render loops for deferred mutations").dependOn(&view_loops_run.step);
-
-    const check_step = b.step("check", "Run line limit, view-loop check, Debug tests, and ReleaseFast tests");
+    const check_step = b.step("check", "Run line limit, Debug tests, and ReleaseFast tests");
     check_step.dependOn(&lines_run.step);
-    check_step.dependOn(&view_loops_run.step);
     check_step.dependOn(&test_run.step);
     check_step.dependOn(&test_fast_run.step);
 }

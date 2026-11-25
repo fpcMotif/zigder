@@ -8,6 +8,9 @@ on:
 jobs:
   check:
     runs-on: macos-26
+    defaults:
+      run:
+        working-directory: ref/rust
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache@v4
@@ -15,7 +18,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: cargo-${{ hashFiles('Cargo.lock') }}
+          key: cargo-${{ hashFiles('ref/rust/Cargo.lock') }}
       - run: rustup update stable && rustup default stable && rustup component add rustfmt
       - run: cargo fmt --all --check
       - run: cargo build --release --examples
@@ -38,6 +41,9 @@ jobs:
     needs: check
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: macos-26
+    defaults:
+      run:
+        working-directory: ref/rust
     permissions:
       contents: write
     concurrency:
@@ -67,7 +73,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ~/.cargo/bin
-          key: release-${{ hashFiles('Cargo.lock') }}
+          key: release-${{ hashFiles('ref/rust/Cargo.lock') }}
       - if: steps.version.outputs.publish == 'true'
         run: rustup update stable && rustup default stable
       - if: steps.version.outputs.publish == 'true'
