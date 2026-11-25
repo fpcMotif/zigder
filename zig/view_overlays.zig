@@ -5,6 +5,7 @@ const kit = nanoui.kit;
 const app_mod = @import("app.zig");
 const AppState = app_mod.AppState;
 const theme = @import("theme.zig");
+const file_icons = @import("file_icons.zig");
 const Palette = theme.Palette;
 
 pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
@@ -41,18 +42,13 @@ fn renderPalette(s: *AppState, c: *ui.Context, pal: Palette) void {
         ui.icon(c, if (s.modal_is_go) "folder" else "magnifyingglass", .{ .size = 15, .color = pal.accent });
         ui.key(c, "modal-input");
         const tres = ui.textField(c, &s.modal_buf, .{
-            .placeholder = "Type a path (/ or ~) or search disk...",
+            .placeholder = "Search this Mac, or type a path",
             .width = .fill,
             .size = 14,
             .select_all_on_focus = true,
         });
         if (tres.changed) s.updateModalSearch();
         if (tres.submitted) s.commitModalGoOrSearch();
-        ui.key(c, "modal-close");
-        if (kit.iconButton(c, "xmark", .{ .size = .xs }).clicked) {
-            s.closeOverlay();
-            return;
-        }
     }
 
     const txt = s.modal_buf.text();
@@ -66,15 +62,15 @@ fn renderPalette(s: *AppState, c: *ui.Context, pal: Palette) void {
 
     const hits = s.modal_results.hits.items;
     if (hits.len == 0) {
-        const msg = if (txt.len == 0) "Instant search across indexed disk" else "No matches";
-        ui.text(c, msg, .{ .size = 12.5, .color = pal.muted });
+        if (txt.len > 0) ui.text(c, "No results", .{ .size = 12.5, .color = pal.muted });
         return;
     }
 
-    ui.textf(c, .{ .size = 11, .color = pal.subtle, .tabular = true }, "{d} matches in {d} us", .{ hits.len, s.modal_results.elapsed_us });
+    ui.textf(c, .{ .size = 11, .color = pal.subtle, .tabular = true }, "{s} results in {s}", .{ theme.fmtCount(c, hits.len), theme.fmtElapsed(c, s.modal_results.elapsed_us) });
     const list_h: f32 = @min(300, @as(f32, @floatFromInt(hits.len)) * 34 + 8);
     var pick_hit: ?usize = null;
     var list = ui.list(c, .{ .count = hits.len, .row_height = 32, .gap = 2, .height = .{ .px = list_h } });
+    theme.listScrollbar(c, pal);
     while (list.next()) |i| {
         const hit = hits[i];
         const path = s.modal_results.pathOf(hit);
@@ -86,7 +82,7 @@ fn renderPalette(s: *AppState, c: *ui.Context, pal: Palette) void {
         const row = ui.div(c).row().wFull().h(32).px(8).gap(8).itemsCenter().rounded(6).bg(if (sel) pal.row_sel else pal.bg).hover(if (sel) pal.row_sel else pal.row_hover).control();
         const it = row.interaction();
         defer row.end();
-        ui.icon(c, ic.name, .{ .size = 14, .color = if (sel) pal.accent_text else ic.color });
+        file_icons.path(c, path, hit.kind, 16, ic, if (sel) pal.accent_text else null);
         {
             const text_col = ui.div(c).column().grow().gap(1).clip();
             defer text_col.end();
@@ -146,7 +142,12 @@ fn renderDeleteConfirm(s: *AppState, c: *ui.Context, pal: Palette) void {
     defer card.end();
 
     ui.text(c, "Delete Immediately?", .{ .size = 15, .weight = .semibold, .color = pal.text });
-    ui.textf(c, .{ .size = 13, .color = pal.muted, .wrap = true }, "Delete {d} selected item(s) permanently. This cannot be undone.", .{s.delete_targets.len});
+    const style: ui.TextStyle = .{ .size = 13, .color = pal.muted, .wrap = true };
+    if (s.delete_targets.len == 1) {
+        ui.text(c, "1 item will be deleted. You can’t undo this.", style);
+    } else {
+        ui.textf(c, style, "{d} items will be deleted. You can’t undo this.", .{s.delete_targets.len});
+    }
 
     const actions = ui.div(c).row().wFull().justifyEnd().gap(8);
     defer actions.end();

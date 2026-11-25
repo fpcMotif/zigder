@@ -7,6 +7,9 @@ const engine_mod = @import("engine.zig");
 const app_mod = @import("app.zig");
 const view_mod = @import("view.zig");
 const fs_entry = @import("fs_entry.zig");
+const theme = @import("theme.zig");
+const file_icons = @import("file_icons.zig");
+const file_preview = @import("file_preview.zig");
 
 extern "c" fn mkdtemp(template: [*:0]u8) ?[*:0]u8;
 extern "c" fn system(cmd: [*:0]const u8) c_int;
@@ -254,4 +257,94 @@ test "ui.Tester double-click enters folder in list, icon, gallery, inline rename
     t.frame();
     try std.testing.expect(t.hasText("alpha2.zig"));
     try std.testing.expect(!t.hasText("alpha.zig"));
+}
+
+test "ui: sizes read as Finder writes them" {
+    var buf: [32]u8 = undefined;
+    try std.testing.expectEqualStrings("Zero bytes", theme.fmtBytesBuf(&buf, 0));
+    try std.testing.expectEqualStrings("1 byte", theme.fmtBytesBuf(&buf, 1));
+    try std.testing.expectEqualStrings("545 bytes", theme.fmtBytesBuf(&buf, 545));
+    try std.testing.expectEqualStrings("464 KB", theme.fmtBytesBuf(&buf, 463_600));
+    try std.testing.expectEqualStrings("2.6 MB", theme.fmtBytesBuf(&buf, 2_600_000));
+    try std.testing.expectEqualStrings("1.41 GB", theme.fmtBytesBuf(&buf, 1_410_000_000));
+    try std.testing.expectEqualStrings("205.7 GB", theme.fmtBytesBuf(&buf, 205_700_000_000));
+}
+
+test "ui: counts group digits by thousands" {
+    var buf: [26]u8 = undefined;
+    try std.testing.expectEqualStrings("0", theme.fmtCountBuf(&buf, 0));
+    try std.testing.expectEqualStrings("999", theme.fmtCountBuf(&buf, 999));
+    try std.testing.expectEqualStrings("1,000", theme.fmtCountBuf(&buf, 1000));
+    try std.testing.expectEqualStrings("2,188,690", theme.fmtCountBuf(&buf, 2_188_690));
+    try std.testing.expectEqualStrings("18,446,744,073,709,551,615", theme.fmtCountBuf(&buf, std.math.maxInt(u64)));
+}
+
+test "ui: search time reads in microseconds, then milliseconds" {
+    var buf: [32]u8 = undefined;
+    try std.testing.expectEqualStrings("0 µs", theme.fmtElapsedBuf(&buf, 0));
+    try std.testing.expectEqualStrings("412 µs", theme.fmtElapsedBuf(&buf, 412));
+    try std.testing.expectEqualStrings("1.0 ms", theme.fmtElapsedBuf(&buf, 1000));
+    try std.testing.expectEqualStrings("12.3 ms", theme.fmtElapsedBuf(&buf, 12_340));
+}
+
+test "ui: dates read as Finder writes them" {
+    var buf: [48]u8 = undefined;
+    const d: theme.LocalDate = .{ .year = 2026, .month = 11, .day = 24, .hour = 3, .minute = 6 };
+    try std.testing.expectEqualStrings("Nov 24, 2026 at 3:06 AM", theme.fmtDateBuf(&buf, d, 5, .h12));
+    try std.testing.expectEqualStrings("Yesterday at 3:06 AM", theme.fmtDateBuf(&buf, d, 1, .h12));
+    try std.testing.expectEqualStrings("Today at 3:06 AM", theme.fmtDateBuf(&buf, d, 0, .h12));
+    const noon: theme.LocalDate = .{ .year = 2026, .month = 1, .day = 2, .hour = 12, .minute = 0 };
+    try std.testing.expectEqualStrings("Jan 2, 2026 at 12:00 PM", theme.fmtDateBuf(&buf, noon, 300, .h12));
+    const midnight: theme.LocalDate = .{ .year = 2026, .month = 1, .day = 2, .hour = 0, .minute = 30 };
+    try std.testing.expectEqualStrings("Today at 12:30 AM", theme.fmtDateBuf(&buf, midnight, 0, .h12));
+    const evening: theme.LocalDate = .{ .year = 2026, .month = 1, .day = 2, .hour = 23, .minute = 5 };
+    try std.testing.expectEqualStrings("Today at 11:05 PM", theme.fmtDateBuf(&buf, evening, 0, .h12));
+    const morning: theme.LocalDate = .{ .year = 2026, .month = 11, .day = 25, .hour = 9, .minute = 5 };
+    try std.testing.expectEqualStrings("Today at 09:05", theme.fmtDateBuf(&buf, morning, 0, .h24));
+    const afternoon: theme.LocalDate = .{ .year = 2026, .month = 11, .day = 24, .hour = 13, .minute = 49 };
+    try std.testing.expectEqualStrings("Yesterday at 13:49", theme.fmtDateBuf(&buf, afternoon, 1, .h24));
+    try std.testing.expectEqualStrings("Nov 21, 2026 at 13:49", theme.fmtDateBuf(&buf, .{ .year = 2026, .month = 11, .day = 21, .hour = 13, .minute = 49 }, 4, .h24));
+}
+
+test "ui: the preview pane writes dates as Finder does" {
+    var buf: [64]u8 = undefined;
+    const d: theme.LocalDate = .{ .year = 2026, .month = 11, .day = 2, .hour = 8, .minute = 55 };
+    try std.testing.expectEqualStrings("Monday, November 2, 2026 at 08:55", theme.fmtLongDateBuf(&buf, d, 1, .h24));
+    try std.testing.expectEqualStrings("Monday, November 2, 2026 at 8:55 AM", theme.fmtLongDateBuf(&buf, d, 1, .h12));
+}
+
+test "ui: PDF page turns stop at the first and last page" {
+    try std.testing.expectEqual(@as(u32, 1), file_preview.pageAfter(0, 3, 1));
+    try std.testing.expectEqual(@as(u32, 2), file_preview.pageAfter(2, 3, 1));
+    try std.testing.expectEqual(@as(u32, 0), file_preview.pageAfter(0, 3, -1));
+    try std.testing.expectEqual(@as(u32, 1), file_preview.pageAfter(2, 3, -1));
+    try std.testing.expectEqual(@as(u32, 0), file_preview.pageAfter(0, 0, 1));
+}
+
+test "ui: only PDFs and pictures get a rendered preview" {
+    try std.testing.expectEqual(file_preview.Kind.pdf, file_preview.kindOf("/a/Paper.PDF").?);
+    try std.testing.expectEqual(file_preview.Kind.image, file_preview.kindOf("/a/shot.png").?);
+    try std.testing.expect(file_preview.kindOf("/a/build.zig") == null);
+    try std.testing.expect(file_preview.kindOf("/a/LICENSE") == null);
+}
+
+test "ui: files of one type share an icon, folders keep their own" {
+    try std.testing.expectEqual(file_icons.cacheKey("/a/README.md", false), file_icons.cacheKey("/b/notes.MD", false));
+    try std.testing.expect(file_icons.cacheKey("/a/build.zig", false) != file_icons.cacheKey("/a/README.md", false));
+    try std.testing.expect(file_icons.cacheKey("/a/LICENSE", false) != file_icons.cacheKey("/b/LICENSE", false));
+    try std.testing.expect(file_icons.cacheKey("/a/.gitignore", false) != file_icons.cacheKey("/b/.gitignore", false));
+    try std.testing.expect(file_icons.cacheKey("/Users/x/Desktop", true) != file_icons.cacheKey("/Users/x/Downloads", true));
+    try std.testing.expect(file_icons.cacheKey("/a/Notes.app", true) != file_icons.cacheKey("/a/Maps.app", true));
+}
+
+test "ui: macOS draws a folder and a document differently" {
+    if (comptime ui.portable) return error.SkipZigTest;
+    const side = 32;
+    const folder = file_icons.rasterize("/System", side) orelse return error.NoFolderIcon;
+    defer std.heap.smp_allocator.free(folder);
+    const document = file_icons.rasterize("/etc/hosts", side) orelse return error.NoDocumentIcon;
+    defer std.heap.smp_allocator.free(document);
+    try std.testing.expectEqual(@as(usize, side * side * 4), folder.len);
+    try std.testing.expect(std.mem.indexOfNone(u8, folder, &.{0}) != null);
+    try std.testing.expect(!std.mem.eql(u8, folder, document));
 }

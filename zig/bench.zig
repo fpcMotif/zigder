@@ -29,7 +29,6 @@ extern "c" fn posix_spawn_file_actions_init(a: *?*anyopaque) c_int;
 extern "c" fn posix_spawn_file_actions_destroy(a: *?*anyopaque) c_int;
 extern "c" fn posix_spawn_file_actions_adddup2(a: *?*anyopaque, fd: c_int, newfd: c_int) c_int;
 extern "c" fn posix_spawn_file_actions_addclose(a: *?*anyopaque, fd: c_int) c_int;
-extern "c" fn posix_spawn_file_actions_addopen(a: *?*anyopaque, fd: c_int, path: [*:0]const u8, oflag: c_int, mode: c_uint) c_int;
 extern "c" fn system(cmd: [*:0]const u8) c_int;
 
 const budgets = [_]measure.Budget{
@@ -51,7 +50,6 @@ const QueryBenchRow = struct {
     zigder_p50_us: f64,
     zigder_p95_us: f64,
     founder_p50_us: f64,
-    founder_p95_us: f64,
     speedup: f64,
 };
 
@@ -349,7 +347,6 @@ pub fn main() !void {
             .zigder_p50_us = z_stats.p50,
             .zigder_p95_us = z_stats.p95,
             .founder_p50_us = f_stats.p50,
-            .founder_p95_us = f_stats.p95,
             .speedup = speedup,
         };
     }

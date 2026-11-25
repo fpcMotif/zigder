@@ -18,7 +18,8 @@ pub const InspectorPreview = struct {
     size: u64 = 0,
     alloc: u64 = 0,
     mtime: u32 = 0,
-    mode: u16 = 0,
+    created: u32 = 0,
+    last_opened: u32 = 0,
     dir_items: u64 = 0,
     tag_mask: u8 = 0,
     kind_buf: [48]u8 = undefined,
@@ -44,13 +45,15 @@ pub const InspectorPreview = struct {
         var st: std.c.Stat = undefined;
         if (lstat(pz, &st) != 0) return out;
         out.valid = true;
-        out.mode = @intCast(st.mode & 0o7777);
         const ftype = st.mode & 0o170000;
         out.is_dir = ftype == 0o040000;
         out.size = @intCast(@max(st.size, 0));
         out.alloc = @as(u64, @intCast(@max(st.blocks, 0))) * 512;
         const mt = st.mtimespec.sec;
         out.mtime = if (mt <= 0) 0 else @intCast(@min(mt, std.math.maxInt(u32)));
+        const born = st.birthtimespec.sec;
+        out.created = if (born <= 0) 0 else @intCast(@min(born, std.math.maxInt(u32)));
+        out.last_opened = lastOpened(path);
         out.tag_mask = volumes.readTagMask(path);
 
         const nm = std.fs.path.basename(path);
@@ -85,6 +88,26 @@ pub const InspectorPreview = struct {
         return out;
     }
 };
+
+extern "c" fn MDItemCreate(allocator: ?*anyopaque, path: objc.Object) ?*anyopaque;
+extern "c" fn MDItemCopyAttribute(item: *anyopaque, name: *anyopaque) ?*anyopaque;
+extern "c" fn CFDateGetAbsoluteTime(date: *anyopaque) f64;
+extern "c" fn CFRelease(object: *anyopaque) void;
+extern "c" const kMDItemLastUsedDate: *anyopaque;
+
+const cf_epoch_offset: f64 = 978_307_200;
+
+fn lastOpened(path: []const u8) u32 {
+    const pool = objc.Pool.push();
+    defer pool.pop();
+    const item = MDItemCreate(null, objc.nsString(path)) orelse return 0;
+    defer CFRelease(item);
+    const date = MDItemCopyAttribute(item, kMDItemLastUsedDate) orelse return 0;
+    defer CFRelease(date);
+    const unix = CFDateGetAbsoluteTime(date) + cf_epoch_offset;
+    if (unix <= 0 or unix > std.math.maxInt(u32)) return 0;
+    return @intFromFloat(unix);
+}
 
 fn describeKind(name: []const u8, ftype: u16) []const u8 {
     if (ftype == 0o120000) return "Alias / Symlink";

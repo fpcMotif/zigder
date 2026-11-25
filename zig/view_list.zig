@@ -7,6 +7,7 @@ const AppState = app_mod.AppState;
 const theme = @import("theme.zig");
 const Palette = theme.Palette;
 const fs_entry = @import("fs_entry.zig");
+const file_icons = @import("file_icons.zig");
 
 pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
     const compact = c.size.w < 680;
@@ -14,34 +15,34 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
     defer cols.end();
 
     {
-        const hdr = ui.div(c).row().wFull().h(26).px(12).gap(8).itemsCenter().bg(pal.surface).border(pal.divider).borderW(0.5);
+        const hdr = ui.div(c).row().wFull().h(theme.metric.bar_h).px(theme.metric.pane_inset + 6).gap(8).itemsCenter().bg(pal.bg).border(pal.divider).borderW(0.5);
         defer hdr.end();
 
-        sortHead(s, c, pal, "Name", .name, 0, true);
-        if (!compact) sortHead(s, c, pal, "Date Modified", .modified, 128, false);
-        sortHead(s, c, pal, "Size", .size, 84, false);
-        if (!compact) sortHead(s, c, pal, "Kind", .kind, 96, false);
+        sortHead(s, c, pal, "Name", .name, 0, .grow);
+        if (!compact) sortHead(s, c, pal, "Date Modified", .modified, theme.metric.date_col_w, .start);
+        sortHead(s, c, pal, "Size", .size, theme.metric.size_col_w, .end);
+        if (!compact) sortHead(s, c, pal, "Kind", .kind, theme.metric.kind_col_w, .start);
     }
 
     const rows_slice = s.visibleRows();
     if (rows_slice.len == 0) {
         const empty_box = ui.div(c).column().sizeFull().center().gap(6);
         defer empty_box.end();
-        ui.icon(c, theme.uiIconName("folder"), .{ .size = 28, .color = pal.subtle });
         ui.text(c, if (s.active_tag_filter != null) "No tagged items" else "Empty folder", .{ .size = 14, .color = pal.muted });
         return;
     }
 
     var activate_row: ?usize = null;
     var commit_rename = false;
-    var list = ui.list(c, .{ .count = rows_slice.len, .row_height = 26, .gap = 1, .padding = .xy(6, 4) });
+    var list = ui.list(c, .{ .count = rows_slice.len, .row_height = theme.metric.row_h, .gap = 0, .padding = .xy(theme.metric.pane_inset, 2) });
+    theme.listScrollbar(c, pal);
     while (list.next()) |r| {
         const eid = rows_slice[r];
         const ent = s.listing.entries.items[eid];
         const nm = s.listing.nameOf(ent);
         const sel = s.tabConst().selected.contains(eid);
         const bg_col = if (sel) pal.row_sel else if ((r & 1) == 1) pal.row_alt else pal.bg;
-        const row = ui.div(c).row().wFull().h(26).px(8).gap(8).itemsCenter().rounded(5).bg(bg_col).hover(if (sel) pal.row_sel else pal.row_hover).control();
+        const row = ui.div(c).row().wFull().h(theme.metric.row_h).px(6).gap(8).itemsCenter().rounded(theme.metric.row_radius).bg(bg_col).hover(if (sel) pal.row_sel else pal.row_hover).control();
         const it = row.interaction();
         theme.describeNode(c, row.index, .row, nm, theme.kindLabel(&s.listing, ent), sel, true);
         defer row.end();
@@ -53,7 +54,7 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
         {
             const name_cell = ui.div(c).row().grow().gap(8).itemsCenter().clip();
             defer name_cell.end();
-            ui.icon(c, ic.name, .{ .size = 15, .color = if (sel) pal.accent_text else ic.color, .frame = 18 });
+            file_icons.entry(c, &s.listing, ent, 16, ic, if (sel) pal.accent_text else null);
             if (s.renaming_row != null and s.renaming_row.? == r) {
                 ui.key(c, "inline-rename");
                 const rres = ui.textField(c, &s.rename_buf, .{
@@ -63,7 +64,7 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
                 });
                 if (rres.submitted) commit_rename = true;
             } else {
-                ui.text(c, nm, .{ .size = 13, .color = fg, .truncate = .ellipsis });
+                ui.text(c, nm, .{ .size = theme.size.body, .color = fg, .truncate = .middle });
             }
             if (ent.tag_mask != 0) {
                 for (0..7) |b| {
@@ -75,25 +76,25 @@ pub fn render(s: *AppState, c: *ui.Context, pal: Palette) void {
         }
 
         if (!compact) {
-            const mt_box = ui.div(c).row().w(128).justifyEnd();
+            const mt_box = ui.div(c).row().w(theme.metric.date_col_w).px(4).clip();
             defer mt_box.end();
-            ui.text(c, theme.fmtMtime(c, ent.mtime), .{ .size = 12, .color = muted, .tabular = true });
+            ui.text(c, theme.fmtMtime(c, ent.mtime), .{ .size = theme.size.body, .color = muted, .tabular = true });
         }
 
         {
-            const sz_box = ui.div(c).row().w(84).justifyEnd();
+            const sz_box = ui.div(c).row().w(theme.metric.size_col_w).px(4).justifyEnd();
             defer sz_box.end();
             if ((ent.flags & fs_entry.FLAG_SIZE_KNOWN) != 0) {
-                ui.text(c, theme.fmtBytes(c, ent.size), .{ .size = 12, .color = muted, .tabular = true });
+                ui.text(c, theme.fmtBytes(c, ent.size), .{ .size = theme.size.body, .color = muted, .tabular = true });
             } else {
-                ui.text(c, "--", .{ .size = 12, .color = muted });
+                ui.text(c, "--", .{ .size = theme.size.body, .color = muted });
             }
         }
 
         if (!compact) {
-            const kind_box = ui.div(c).row().w(96).justifyEnd();
+            const kind_box = ui.div(c).row().w(theme.metric.kind_col_w).px(4).clip();
             defer kind_box.end();
-            ui.text(c, theme.kindLabel(&s.listing, ent), .{ .size = 12, .color = muted, .truncate = .ellipsis });
+            ui.text(c, theme.kindLabel(&s.listing, ent), .{ .size = theme.size.body, .color = muted, .truncate = .middle });
         }
 
         if (it.double_clicked) {
@@ -118,19 +119,23 @@ fn sortHead(
     label: []const u8,
     col: fs_entry.SortCol,
     width: f32,
-    grow: bool,
+    place: enum { grow, start, end },
 ) void {
     ui.key(c, label);
     var d = ui.div(c).row().gap(4).itemsCenter().px(4).py(2).rounded(4).hover(pal.row_hover).control();
-    d = if (grow) d.grow() else d.w(width).justifyEnd();
+    d = switch (place) {
+        .grow => d.grow().justifyBetween(),
+        .start => d.w(width),
+        .end => d.w(width).justifyEnd(),
+    };
     const it = d.interaction();
     theme.describeNode(c, d.index, .button, label, "", s.sort_col == col, true);
     defer d.end();
 
     const active = s.sort_col == col;
     ui.text(c, label, .{
-        .size = 11.5,
-        .weight = if (active) .semibold else .medium,
+        .size = theme.size.caption,
+        .weight = if (active) .semibold else .regular,
         .color = if (active) pal.text else pal.muted,
     });
     if (active) {
@@ -145,13 +150,10 @@ pub fn renderSearch(s: *AppState, c: *ui.Context, pal: Palette) void {
     defer cols.end();
 
     {
-        const hdr = ui.div(c).row().wFull().h(32).px(12).gap(8).itemsCenter().justifyBetween().bg(pal.surface).border(pal.divider).borderW(0.5);
+        const hdr = ui.div(c).row().wFull().h(32).px(12).gap(8).itemsCenter().bg(pal.surface).border(pal.divider).borderW(0.5);
         defer hdr.end();
 
-        ui.textf(c, .{ .size = 12, .weight = .medium, .color = pal.text, .tabular = true }, "{d} results in {d} us", .{
-            s.search_results.hits.items.len,
-            s.search_results.elapsed_us,
-        });
+        ui.text(c, "Search:", .{ .size = 12, .color = pal.muted });
 
         const scope_row = ui.div(c).row().gap(4).itemsCenter();
         defer scope_row.end();
@@ -181,13 +183,13 @@ pub fn renderSearch(s: *AppState, c: *ui.Context, pal: Palette) void {
     if (hits.len == 0) {
         const empty_box = ui.div(c).column().sizeFull().center().gap(6);
         defer empty_box.end();
-        ui.icon(c, "magnifyingglass", .{ .size = 28, .color = pal.subtle });
-        ui.text(c, if (s.engine.ready.load(.acquire)) "No matching files" else "Index loading...", .{ .size = 14, .color = pal.muted });
+        ui.text(c, if (s.engine.ready.load(.acquire)) "No results" else "Indexing…", .{ .size = 14, .color = pal.muted });
         return;
     }
 
     var open_hit: ?usize = null;
     var list = ui.list(c, .{ .count = hits.len, .row_height = 36, .gap = 1, .padding = .xy(8, 4) });
+    theme.listScrollbar(c, pal);
     while (list.next()) |i| {
         const hit = hits[i];
         const path = s.search_results.pathOf(hit);
@@ -202,7 +204,7 @@ pub fn renderSearch(s: *AppState, c: *ui.Context, pal: Palette) void {
         const fg = if (sel) pal.accent_text else pal.text;
         const muted = if (sel) pal.accent_text.alpha(0.85) else pal.muted;
         const ic = theme.iconForPath(path, hit.kind, pal);
-        ui.icon(c, ic.name, .{ .size = 16, .color = if (sel) pal.accent_text else ic.color, .frame = 20 });
+        file_icons.path(c, path, hit.kind, 18, ic, if (sel) pal.accent_text else null);
 
         {
             const text_col = ui.div(c).column().grow().gap(1).clip();

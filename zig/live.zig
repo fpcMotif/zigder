@@ -34,13 +34,6 @@ pub const LiveEntry = struct {
     mtime: u32,
 };
 
-pub const LiveChild = struct {
-    name: []u8,
-    kind: u8,
-    size: u64,
-    mtime: u32,
-};
-
 const OverlayCtx = struct {
     names: *const std.ArrayList(u8),
     items: *const std.ArrayList(OverlayEntry),

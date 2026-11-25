@@ -2,10 +2,6 @@ const std = @import("std");
 const fmt = @import("index_fmt.zig");
 const walk = @import("walk.zig");
 
-extern "c" fn open(path: [*:0]const u8, flags: c_int, ...) c_int;
-extern "c" fn read(fd: c_int, buf: [*]u8, n: usize) isize;
-extern "c" fn close(fd: c_int) c_int;
-
 pub const FolderTotal = struct {
     name: []const u8,
     totals: fmt.Totals,
@@ -29,19 +25,6 @@ pub const Index = struct {
     by_key_cover: i32,
     top_prior: i8,
     off: [fmt.NZSEC]usize,
-
-    pub fn savedEventId(path: []const u8) ?u64 {
-        var pbuf: [2048]u8 = undefined;
-        const cpath = std.fmt.bufPrintSentinel(&pbuf, "{s}", .{path}, 0) catch return null;
-        const fd = open(cpath, 0);
-        if (fd < 0) return null;
-        defer _ = close(fd);
-        var hdr: [128]u8 = undefined;
-        const got = read(fd, &hdr, hdr.len);
-        if (got < 128) return null;
-        const f = fmt.readHeaderFields(13, &hdr, fmt.MAGIC_ZSIDX) orelse return null;
-        return f[4];
-    }
 
     pub fn load(path: []const u8) !Index {
         const map = try fmt.mmapFile(path);
@@ -138,10 +121,6 @@ pub const Index = struct {
 
     pub fn byKey(self: *const Index) []const u32 {
         return self.slice(u32, .by_key, self.nby_key);
-    }
-
-    pub fn byKeyCounts(self: *const Index) []const u32 {
-        return self.slice(u32, .by_key_counts, 256);
     }
 
     pub fn nameBits(self: *const Index) []const u64 {
@@ -312,42 +291,6 @@ pub const Index = struct {
         return .{ .start = s, .end = s + l };
     }
 
-    pub fn descendants(self: *const Index, k: u32) struct { start: u32, end: u32 } {
-        const de = self.dirEntry();
-        const s = self.dirStart()[k];
-        const e = self.dirEnd()[k];
-        return .{
-            .start = lowerBound(de, s),
-            .end = lowerBound(de, e),
-        };
-    }
-
-    pub fn pathInto(self: *const Index, i: usize, out: *std.ArrayList(u8), gpa: std.mem.Allocator) !void {
-        out.clearRetainingCapacity();
-        if (i == 0) {
-            try out.append(gpa, '/');
-            return;
-        }
-        const de = self.dirEntry();
-        const dp = self.dirParent();
-        const par = self.parent();
-        var chain: [256]u32 = undefined;
-        chain[0] = @intCast(i);
-        var k: usize = 1;
-        var d = par[i];
-        while (d != 0 and k < chain.len) {
-            chain[k] = de[d];
-            k += 1;
-            d = dp[d];
-        }
-        var j = k;
-        while (j > 0) {
-            j -= 1;
-            try out.append(gpa, '/');
-            try out.appendSlice(gpa, self.name(chain[j]));
-        }
-    }
-
     pub fn pathBuf(self: *const Index, i: usize, buf: []u8) ?[]const u8 {
         if (i == 0) {
             if (buf.len < 1) return null;
@@ -455,14 +398,4 @@ pub const Index = struct {
 pub fn trimTrailingSlash(path: []const u8) []const u8 {
     if (path.len <= 1) return path;
     return std.mem.trimEnd(u8, path, "/");
-}
-
-fn lowerBound(slice: []const u32, target: u32) u32 {
-    var lo: usize = 0;
-    var hi: usize = slice.len;
-    while (lo < hi) {
-        const mid = lo + (hi - lo) / 2;
-        if (slice[mid] < target) lo = mid + 1 else hi = mid;
-    }
-    return @intCast(lo);
 }

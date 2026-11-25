@@ -176,7 +176,7 @@ pub fn resort(s: *AppState) void {
     if (s.renaming_row != null) s.renaming_row = if (rename_eid) |eid| rowOfEid(s, eid) else null;
 }
 
-/// Runs when the engine's generation moves: the index or the disk changed under the UI.
+/// Runs when the engine's generation moves, which means the index or the disk changed under the UI.
 pub fn onIndexChanged(s: *AppState) void {
     reload(s) catch {};
     if (!s.isSearchActive()) return;
