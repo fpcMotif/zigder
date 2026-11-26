@@ -21,6 +21,7 @@ pub const InspectorPreview = struct {
     mtime: u32 = 0,
     created: u32 = 0,
     last_opened: u32 = 0,
+    last_opened_due: bool = false,
     dir_items: u64 = 0,
     tag_mask: u8 = 0,
     kind_buf: [48]u8 = undefined,
@@ -54,7 +55,11 @@ pub const InspectorPreview = struct {
         out.mtime = if (mt <= 0) 0 else @intCast(@min(mt, std.math.maxInt(u32)));
         const born = st.birthtimespec.sec;
         out.created = if (born <= 0) 0 else @intCast(@min(born, std.math.maxInt(u32)));
-        out.last_opened = lastOpened(path);
+        if (spotlight_warming.load(.acquire)) {
+            out.last_opened_due = true;
+        } else {
+            out.last_opened = lastOpened(path);
+        }
         out.tag_mask = volumes.readTagMask(path);
 
         const nm = std.fs.path.basename(path);
@@ -86,7 +91,35 @@ pub const InspectorPreview = struct {
         }
         return out;
     }
+
+    pub fn finishLastOpened(p: *InspectorPreview, path: []const u8) void {
+        if (!p.last_opened_due or spotlight_warming.load(.acquire)) return;
+        p.last_opened_due = false;
+        p.last_opened = lastOpened(path);
+    }
 };
+
+pub var spotlight_warming: std.atomic.Value(bool) = .init(false);
+
+pub const Wake = struct {
+    ctx: ?*anyopaque,
+    func: *const fn (?*anyopaque) void,
+};
+
+pub fn warmLastOpened(wake: Wake) void {
+    spotlight_warming.store(true, .release);
+    const th = std.Thread.spawn(.{}, warmMain, .{wake}) catch {
+        spotlight_warming.store(false, .release);
+        return;
+    };
+    th.detach();
+}
+
+fn warmMain(wake: Wake) void {
+    _ = lastOpened("/");
+    spotlight_warming.store(false, .release);
+    wake.func(wake.ctx);
+}
 
 extern "c" fn MDItemCreate(allocator: ?*anyopaque, path: objc.Object) ?*anyopaque;
 extern "c" fn MDItemCopyAttribute(item: *anyopaque, name: *anyopaque) ?*anyopaque;

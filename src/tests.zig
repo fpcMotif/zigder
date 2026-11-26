@@ -265,6 +265,52 @@ test "fs_entry natural sort, loadFolder, fs_ops with undo/redo, tags, and Inspec
     try std.testing.expect(sb.len >= 7);
 }
 
+test "InspectorPreview leaves the last-opened date for later while Spotlight warms up" {
+    quicklook.spotlight_warming.store(true, .release);
+    defer quicklook.spotlight_warming.store(false, .release);
+
+    var preview = quicklook.InspectorPreview.load("/usr/bin", null);
+    try std.testing.expect(preview.valid);
+    try std.testing.expect(preview.last_opened_due);
+    preview.finishLastOpened("/usr/bin");
+    try std.testing.expect(preview.last_opened_due);
+
+    quicklook.spotlight_warming.store(false, .release);
+    preview.finishLastOpened("/usr/bin");
+    try std.testing.expect(!preview.last_opened_due);
+    try std.testing.expect(!quicklook.InspectorPreview.load("/usr/bin", null).last_opened_due);
+}
+
+test "fs_entry loadFolder reads every entry's tags in a folder large enough for parallel reads" {
+    const gpa = std.testing.allocator;
+    const tmp = try support.TempDir.create("/tmp/zigder-tags-wide");
+    defer tmp.cleanup();
+    const root = tmp.path();
+
+    var undo: fs_undo.UndoStack = .{};
+    defer undo.deinit(gpa);
+
+    const count = 300;
+    const tagged = [_]usize{ 0, 74, 75, 149, 150, 224, 225, 299 };
+    for (0..count) |i| {
+        var name_buf: [16]u8 = undefined;
+        const name = try std.fmt.bufPrint(&name_buf, "f{d:0>3}.txt", .{i});
+        const full = try undo.createFile(gpa, root, name);
+        defer gpa.free(full);
+        if (std.mem.indexOfScalar(usize, &tagged, i)) |k| {
+            try std.testing.expect(volumes.writeTagMask(full, @as(u8, 1) << @intCast(k % 7)));
+        }
+    }
+
+    var listing = try fs_entry.loadFolder(gpa, root, null, .name, true, true, false);
+    defer listing.deinit(gpa);
+    try std.testing.expectEqual(@as(usize, count), listing.order.items.len);
+    for (listing.order.items, 0..) |eid, i| {
+        const want: u8 = if (std.mem.indexOfScalar(usize, &tagged, i)) |k| @as(u8, 1) << @intCast(k % 7) else 0;
+        try std.testing.expectEqual(want, listing.entries.items[eid].tag_mask);
+    }
+}
+
 test "live_sync APFS firmlink canonicalization, fast dead-bit totals, and scoped UI wakes" {
     const gpa = std.testing.allocator;
     try std.testing.expectEqualStrings("/Users/test/devv", live_sync.canonicalEventPath("/System/Volumes/Data/Users/test/devv/").?);
