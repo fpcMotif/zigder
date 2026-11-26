@@ -83,6 +83,7 @@ pub fn main(init: std.process.Init) !void {
 
     try app.run();
     idle_rest.stopped = true;
+    if (app.flags.snapshot == null) std.process.exit(0);
     engine.stop();
 }
 
