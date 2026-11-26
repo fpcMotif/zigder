@@ -8,6 +8,7 @@ const AppState = app_mod.AppState;
 const menus = @import("app/menus.zig");
 const view_mod = @import("ui/view.zig");
 const gpu_rest = @import("ui/gpu_rest.zig");
+const quicklook = @import("fs/quicklook.zig");
 
 pub fn main(init: std.process.Init) !void {
     const gpa = std.heap.c_allocator;
@@ -44,6 +45,7 @@ pub fn main(init: std.process.Init) !void {
 
     var engine = engine_mod.Engine.init(gpa);
     defer engine.deinit();
+    if (app.flags.snapshot == null) quicklook.warmLastOpened(.{ .ctx = &engine, .func = wakeFromEngine });
 
     var state = try AppState.init(gpa, &engine, home, initial_path);
     defer state.deinit();
@@ -130,6 +132,11 @@ fn hostSendEditAction(_: ?*anyopaque, sel_name: [:0]const u8) void {
 fn wakeWindow(ctx: ?*anyopaque) void {
     const w: *nanoui.Window = @ptrCast(@alignCast(ctx orelse return));
     w.redrawFromAnyThread();
+}
+
+fn wakeFromEngine(ctx: ?*anyopaque) void {
+    const e: *engine_mod.Engine = @ptrCast(@alignCast(ctx orelse return));
+    e.wakeUi();
 }
 
 fn onQuitTimer(ctx: ?*anyopaque) callconv(.c) void {

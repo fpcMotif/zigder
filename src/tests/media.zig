@@ -147,6 +147,36 @@ test "media: IconCache caches hits, respects eviction budget, and frees all pixe
     try std.testing.expectEqual(@as(usize, 5), mock.calls);
 }
 
+test "media: IconCache defers misses past the frame budget and draws them on later frames" {
+    const gpa = std.testing.allocator;
+    var mock: MockIconCtx = .{};
+    var cache: fs_media.IconCache = .{
+        .gpa = gpa,
+        .frame_budget_ns = 0,
+        .rasterizer = .{ .ctx = &mock, .icon = MockIconCtx.draw },
+    };
+    defer cache.deinit();
+
+    cache.beginFrame();
+    _ = cache.lookup("/a/one.md", false, 16) orelse return error.MissingPixels;
+    try std.testing.expect(cache.lookup("/a/dir1", true, 16) == null);
+    try std.testing.expect(cache.lookup("/a/dir2", true, 16) == null);
+    try std.testing.expectEqual(@as(usize, 1), mock.calls);
+    try std.testing.expect(cache.deferred);
+    _ = cache.lookup("/b/two.md", false, 16) orelse return error.MissingPixels;
+
+    cache.beginFrame();
+    try std.testing.expect(!cache.deferred);
+    _ = cache.lookup("/a/dir1", true, 16) orelse return error.MissingPixels;
+    try std.testing.expect(cache.lookup("/a/dir2", true, 16) == null);
+    try std.testing.expectEqual(@as(usize, 2), mock.calls);
+
+    cache.beginFrame();
+    _ = cache.lookup("/a/dir2", true, 16) orelse return error.MissingPixels;
+    try std.testing.expectEqual(@as(usize, 3), mock.calls);
+    try std.testing.expect(!cache.deferred);
+}
+
 const MockPreviewCtx = struct {
     pdf_calls: usize = 0,
     img_calls: usize = 0,

@@ -157,8 +157,6 @@ pub fn loadFolder(
     try out.entries.ensureTotalCapacity(gpa, raw.ents.items.len);
     try out.names.ensureTotalCapacity(gpa, raw.names.items.len);
 
-    var path_buf: [2048]u8 = undefined;
-
     for (raw.ents.items) |r| {
         const nm = raw.entName(r);
         const noff: u32 = @intCast(out.names.items.len);
@@ -191,14 +189,11 @@ pub fn loadFolder(
         var ext_off: u16 = @intCast(nm.len);
         if (!is_dir or is_pkg) ext_off = @intCast(nm.len - fs_kind.extOfName(nm).len);
 
-        const full_p = index_read.joinBuf(&path_buf, clean, nm);
-        const tmask: u8 = if (full_p) |fp| volumes.readTagMask(fp) else 0;
-
         out.entries.appendAssumeCapacity(.{
             .name_off = noff,
             .name_len = @intCast(nm.len),
             .kind = r.kind,
-            .tag_mask = tmask,
+            .tag_mask = 0,
             .ext_off = ext_off,
             .flags = flags,
             .mtime = r.mtime,
@@ -206,8 +201,42 @@ pub fn loadFolder(
             .dir_items = items,
         });
     }
+    readTags(&out);
     try out.resort(gpa, col, ascending, folders_first, show_hidden);
     return out;
+}
+
+const tag_workers = 4;
+const parallel_tags_min = 256;
+
+const TagSpan = struct {
+    listing: *FolderListing,
+    lo: usize,
+    hi: usize,
+
+    fn read(span: TagSpan) void {
+        var buf: [2048]u8 = undefined;
+        for (span.listing.entries.items[span.lo..span.hi]) |*e| {
+            const full = index_read.joinBuf(&buf, span.listing.path, span.listing.nameOf(e.*)) orelse continue;
+            e.tag_mask = volumes.readTagMask(full);
+        }
+    }
+};
+
+fn readTags(listing: *FolderListing) void {
+    const n = listing.entries.items.len;
+    const workers: usize = if (n < parallel_tags_min) 1 else tag_workers;
+    const per = n / workers;
+    var threads: [tag_workers]?std.Thread = @splat(null);
+    for (1..workers) |w| {
+        const span: TagSpan = .{ .listing = listing, .lo = w * per, .hi = if (w + 1 == workers) n else (w + 1) * per };
+        threads[w] = std.Thread.spawn(.{}, TagSpan.read, .{span}) catch blk: {
+            span.read();
+            break :blk null;
+        };
+    }
+    TagSpan.read(.{ .listing = listing, .lo = 0, .hi = if (workers == 1) n else per });
+    for (threads) |t| if (t) |th| th.join();
 }
 
 pub fn naturalCmp(a: []const u8, b: []const u8) std.math.Order {

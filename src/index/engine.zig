@@ -440,7 +440,7 @@ pub const Engine = struct {
         _ = std.c.pthread_mutex_unlock(&self.wake_mutex);
     }
 
-    fn wakeUi(self: *Engine) void {
+    pub fn wakeUi(self: *Engine) void {
         _ = self.generation.fetchAdd(1, .release);
         _ = self.ui_wakes.fetchAdd(1, .release);
         _ = std.c.pthread_mutex_lock(&self.wake_mutex);

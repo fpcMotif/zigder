@@ -18,6 +18,7 @@ pub fn view(s: *AppState, c: *ui.Context) void {
     var q: commands.Queue = .{};
     renderFrame(s, c, &s.search.buf, &s.overlay.buf, &s.rename.buf, &s.media, &q);
     s.toaster.view(c);
+    if (s.media.icons.deferred) s.host.requestRedraw();
     if (q.flush(s)) c.changed = true;
 }
 
@@ -26,6 +27,7 @@ fn syncFrame(s: *AppState, c: *ui.Context) void {
     s.media.beginFrame();
     s.text_focused = c.focus_is_text;
     s.syncWithEngine();
+    s.inspector.finishLastOpened(s.inspector_path.items);
     if (s.view_mode == .column and s.columns.items.len == 0) {
         app_sel.rebuildColumns(s);
     }

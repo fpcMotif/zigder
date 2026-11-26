@@ -25,6 +25,8 @@ extern "c" fn CGPDFPageGetBoxRect(page: *anyopaque, box: c_int) objc.CGRect;
 extern "c" fn CGPDFPageGetRotationAngle(page: *anyopaque) c_int;
 extern "c" fn CGPDFPageGetDrawingTransform(page: *anyopaque, box: c_int, rect: objc.CGRect, rotate: c_int, preserve_aspect: bool) Affine;
 
+extern "c" fn clock_gettime_nsec_np(clock_id: c_int) u64;
+const clock_uptime_raw: c_int = 8;
 const premultiplied_bgra: u32 = 2 | (2 << 12);
 const pdf_crop_box: c_int = 1;
 const small_side: u32 = 32;
@@ -96,6 +98,10 @@ pub const IconCache = struct {
     retired: std.AutoHashMapUnmanaged(u64, ?[]u8) = .empty,
     live_bytes: usize = 0,
     live_bytes_max: usize = 24 * 1024 * 1024,
+    frame_budget_ns: u64 = 2 * std.time.ns_per_ms,
+    frame_spent_ns: u64 = 0,
+    frame_draws: u32 = 0,
+    deferred: bool = false,
     rasterizer: Rasterizer = .{},
 
     fn freeMap(gpa: std.mem.Allocator, map: *std.AutoHashMapUnmanaged(u64, ?[]u8)) void {
@@ -111,6 +117,9 @@ pub const IconCache = struct {
     }
 
     pub fn beginFrame(c: *IconCache) void {
+        c.frame_spent_ns = 0;
+        c.frame_draws = 0;
+        c.deferred = false;
         if (c.live_bytes < c.live_bytes_max) return;
         freeMap(c.gpa, &c.retired);
         c.retired = c.live;
@@ -126,7 +135,14 @@ pub const IconCache = struct {
             const bytes = found orelse return null;
             return .{ .key = key, .bgra = bytes, .side = side };
         }
+        if (c.frame_draws > 0 and c.frame_spent_ns >= c.frame_budget_ns) {
+            c.deferred = true;
+            return null;
+        }
+        const started = clock_gettime_nsec_np(clock_uptime_raw);
         const drawn = c.rasterizer.icon(c.rasterizer.ctx, c.gpa, full, side);
+        c.frame_spent_ns += clock_gettime_nsec_np(clock_uptime_raw) - started;
+        c.frame_draws += 1;
         c.live.put(c.gpa, key, drawn) catch {
             if (drawn) |bytes| c.gpa.free(bytes);
             return null;
