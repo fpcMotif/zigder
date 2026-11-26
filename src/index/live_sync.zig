@@ -139,7 +139,9 @@ pub fn applyFetched(
         lv.removePath(p);
         if (f.attrs) |a| {
             try lv.putOverlay(p, a.kind, a.size, a.alloc, a.mtime);
-            if (f.scan) |*sc| try insertScan(lv, p, sc);
+            if (f.scan) |*sc| {
+                if (sc.entryCount() > lv.overlay_limit) lv.rebuild_wanted = true else try insertScan(lv, p, sc);
+            }
             return .{ .mutated = true };
         }
         return .{ .mutated = had_before };
@@ -300,7 +302,7 @@ pub fn applySubtrees(lv: *live_mod.Live, items: []SubtreeScan) !void {
             if ((cur.kind & 3) != walk.KIND_DIR) continue;
         } else continue;
         if (st.scan) |*sc| {
-            try insertScan(lv, st.path, sc);
+            if (sc.entryCount() > lv.overlay_limit) lv.rebuild_wanted = true else try insertScan(lv, st.path, sc);
         }
     }
 }

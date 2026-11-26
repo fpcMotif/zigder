@@ -1,6 +1,7 @@
 const std = @import("std");
 const tcc = @import("tcc.zig");
 const index_read = @import("read.zig");
+const Scratch = @import("scratch.zig").Scratch;
 
 extern "c" fn setiopolicy_np(iotype: c_int, scope: c_int, policy: c_int) c_int;
 extern "c" fn getattrlistbulk(dirfd: c_int, alist: *AttrList, buf: *anyopaque, size: usize, options: u64) c_int;
@@ -99,14 +100,19 @@ pub const Listing = struct {
 };
 
 pub const ScanResult = struct {
-    arenas: []std.heap.ArenaAllocator,
+    scratches: []Scratch,
     listings: std.ArrayList(Listing),
     gpa: std.mem.Allocator,
 
+    pub fn entryCount(s: *const ScanResult) usize {
+        var n: usize = 0;
+        for (s.listings.items) |l| n += l.ents.items.len;
+        return n;
+    }
+
     pub fn deinit(s: *ScanResult) void {
-        s.listings.deinit(s.gpa);
-        for (s.arenas) |*a| a.deinit();
-        s.gpa.free(s.arenas);
+        for (s.scratches) |*a| a.deinit();
+        s.gpa.free(s.scratches);
     }
 };
 
@@ -313,7 +319,7 @@ const ScanCtx = struct {
     mutex: std.c.pthread_mutex_t = std.c.PTHREAD_MUTEX_INITIALIZER,
     cond: std.c.pthread_cond_t = std.c.PTHREAD_COND_INITIALIZER,
     stack: std.ArrayList(WorkItem) = .empty,
-    arenas: []std.heap.ArenaAllocator,
+    scratches: []Scratch,
     buckets: []std.ArrayList(Listing),
     gpa: std.mem.Allocator,
 
@@ -376,24 +382,21 @@ pub fn scanCancel(gpa: std.mem.Allocator, root: []const u8, skip_paths: []const 
     if (cancel) |c| if (c.load(.acquire)) return error.Canceled;
     raiseFdLimit();
     const workers = @max(@min(thread_count, 16), 1);
-    const arenas = try gpa.alloc(std.heap.ArenaAllocator, workers);
-    for (arenas) |*a| a.* = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    const scratches = try gpa.alloc(Scratch, workers);
+    for (scratches) |*a| a.* = Scratch.init();
     errdefer {
-        for (arenas) |*a| a.deinit();
-        gpa.free(arenas);
+        for (scratches) |*a| a.deinit();
+        gpa.free(scratches);
     }
     const buckets = try gpa.alloc(std.ArrayList(Listing), workers);
     for (buckets) |*b| b.* = .empty;
-    defer {
-        for (buckets) |*b| b.deinit(std.heap.c_allocator);
-        gpa.free(buckets);
-    }
+    defer gpa.free(buckets);
 
     var ctx: ScanCtx = .{
         .skip_paths = skip_paths,
         .track_paths = skip_paths.len > 0,
         .cancel = cancel,
-        .arenas = arenas,
+        .scratches = scratches,
         .buckets = buckets,
         .gpa = gpa,
     };
@@ -426,9 +429,9 @@ pub fn scanCancel(gpa: std.mem.Allocator, root: []const u8, skip_paths: []const 
     var total: usize = 0;
     for (buckets) |b| total += b.items.len;
     var out: std.ArrayList(Listing) = .empty;
-    try out.ensureTotalCapacity(gpa, total);
+    try out.ensureTotalCapacity(scratches[0].allocator(), total);
     for (buckets) |*b| out.appendSliceAssumeCapacity(b.items);
-    return .{ .arenas = arenas, .listings = out, .gpa = gpa };
+    return .{ .scratches = scratches, .listings = out, .gpa = gpa };
 }
 
 fn workerMain(ctx: *ScanCtx, wid: usize) void {
@@ -451,10 +454,10 @@ fn workerMain(ctx: *ScanCtx, wid: usize) void {
 
 fn finishDir(ctx: *ScanCtx, wid: usize, buf: []align(8) u8, fd: c_int, path: ?[]u8, id: u32) void {
     defer if (path) |p| std.heap.c_allocator.free(p);
-    const agpa = ctx.arenas[wid].allocator();
+    const agpa = ctx.scratches[wid].allocator();
     var l: Listing = .{ .id = id };
     if (fd < 0) {
-        ctx.buckets[wid].append(std.heap.c_allocator, l) catch {};
+        ctx.buckets[wid].append(agpa,l) catch {};
         return;
     }
     if (ctx.isCanceled()) {
@@ -468,7 +471,7 @@ fn finishDir(ctx: *ScanCtx, wid: usize, buf: []align(8) u8, fd: c_int, path: ?[]
     }
     const df = DirFd.create(fd) catch {
         _ = close(fd);
-        ctx.buckets[wid].append(std.heap.c_allocator, l) catch {};
+        ctx.buckets[wid].append(agpa,l) catch {};
         return;
     };
 
@@ -497,7 +500,7 @@ fn finishDir(ctx: *ScanCtx, wid: usize, buf: []align(8) u8, fd: c_int, path: ?[]
             };
             if (maybe_empty and child_path == null and entryCount(fd, nz.ptr) == 0) {
                 std.heap.c_allocator.free(nz);
-                ctx.buckets[wid].append(std.heap.c_allocator, .{ .id = e.child }) catch {};
+                ctx.buckets[wid].append(agpa,.{ .id = e.child }) catch {};
             } else {
                 kids.append(std.heap.c_allocator, .{
                     .parent = df,
@@ -511,7 +514,7 @@ fn finishDir(ctx: *ScanCtx, wid: usize, buf: []align(8) u8, fd: c_int, path: ?[]
             }
         }
     }
-    ctx.buckets[wid].append(std.heap.c_allocator, l) catch {};
+    ctx.buckets[wid].append(agpa,l) catch {};
     df.retain(@intCast(kids.items.len));
     ctx.pushWork(kids.items);
     df.release();

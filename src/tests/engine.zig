@@ -345,3 +345,29 @@ test "safety: E2 setWaker(null) serializes with concurrent wakeUi and E3/H1 stop
     try std.testing.expect(!eng2.status().indexing);
     try std.testing.expectError(error.OpenFailed, index_read.Index.load(cancel_idx));
 }
+
+test "engine: an oversized subtree stays out of the overlay and a full overlay requests a rebuild" {
+    const gpa = std.testing.allocator;
+    const tmp = try support.TempDir.create("/tmp/zigder-cap");
+    defer tmp.cleanup();
+    const root = tmp.path();
+    try support.sh("mkdir -p '{s}/dir_a' && printf 'base' > '{s}/dir_a/keep.txt'", .{ root, root });
+
+    var idx_buf: [128]u8 = undefined;
+    const idx_path = try std.fmt.bufPrint(&idx_buf, "{s}/cap.zidx", .{root});
+    try support.buildRootedIndex(gpa, root, idx_path, 10);
+    var eng = try engine_mod.Engine.initHeadlessWithIndex(gpa, idx_path);
+    defer eng.deinit();
+    const lv = &eng.live.?;
+    lv.overlay_limit = 2;
+
+    try support.sh("mkdir -p '{s}/dir_a/sub' && cd '{s}/dir_a/sub' && touch f1 f2 f3 f4 f5", .{ root, root });
+    var a_buf: [128]u8 = undefined;
+    eng.recordChange(try std.fmt.bufPrint(&a_buf, "{s}/dir_a", .{root}));
+    try std.testing.expectEqual(@as(usize, 1), lv.alive_overlay_count);
+
+    try lv.putOverlay("/cap-test/one", 0, 1, 1, 1);
+    try lv.putOverlay("/cap-test/two", 0, 1, 1, 1);
+    try std.testing.expect(!lv.takeRebuildRequest(true));
+    try std.testing.expect(lv.takeRebuildRequest(false));
+}

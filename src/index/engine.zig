@@ -314,6 +314,9 @@ pub const Engine = struct {
             } else |_| {}
         }
 
+        _ = std.c.pthread_mutex_lock(&self.mutex);
+        if (self.live) |*lv| res.rescan = lv.takeRebuildRequest(self.indexing.load(.acquire)) or res.rescan;
+        _ = std.c.pthread_mutex_unlock(&self.mutex);
         return res;
     }
 
@@ -505,10 +508,11 @@ pub const Engine = struct {
             idx.deinit();
             return;
         }
-        const lv = live_mod.Live.init(self.gpa, idx) catch {
+        var lv = live_mod.Live.init(self.gpa, idx) catch {
             idx.deinit();
             return;
         };
+        if (cfg.scan_root != null) lv.overlay_limit = live_mod.overlay_rebuild_limit;
         const since = idx.event_id;
         self.attachLive(lv);
         self.swapStream(null);

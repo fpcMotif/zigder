@@ -2,6 +2,7 @@ const std = @import("std");
 const fmt = @import("fmt.zig");
 const accel = @import("accel.zig");
 const walk = @import("walk.zig");
+const Scratch = @import("scratch.zig").Scratch;
 const measure = @import("../measure.zig");
 
 const bundle_exts = [_][]const u8{
@@ -152,7 +153,7 @@ fn buildExts(
 }
 
 pub fn buildFromFounder(founder: *const fmt.FounderIndex, dest_path: []const u8) !void {
-    var arena_state = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    var arena_state = Scratch.init();
     defer {
         arena_state.deinit();
         measure.releaseHeap();
@@ -212,7 +213,7 @@ pub fn buildFromListings(
     home: []const u8,
     dest_path: []const u8,
 ) !void {
-    var arena_state = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    var arena_state = Scratch.init();
     defer {
         arena_state.deinit();
         measure.releaseHeap();

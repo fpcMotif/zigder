@@ -66,6 +66,8 @@ const OverlaySliceAdapter = struct {
     }
 };
 
+pub const overlay_rebuild_limit: usize = 50_000;
+
 pub const Live = struct {
     gpa: std.mem.Allocator,
     base: index_read.Index,
@@ -80,6 +82,14 @@ pub const Live = struct {
     alive_overlay_count: usize = 0,
     dir_overrides: std.AutoHashMapUnmanaged(u32, DirOverride) = .empty,
     priors: std.StringHashMapUnmanaged(i8) = .empty,
+    overlay_limit: usize = std.math.maxInt(usize),
+    rebuild_wanted: bool = false,
+
+    pub fn takeRebuildRequest(self: *Live, building: bool) bool {
+        const wanted = self.rebuild_wanted or (!building and self.alive_overlay_count > self.overlay_limit);
+        self.rebuild_wanted = false;
+        return wanted;
+    }
 
     pub fn init(gpa: std.mem.Allocator, base: index_read.Index) !Live {
         const nwords = std.math.divCeil(usize, base.n, 64) catch unreachable;
