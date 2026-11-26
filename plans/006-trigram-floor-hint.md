@@ -1,15 +1,15 @@
 # Plan 006: A fuzzy one-word search reuses the score floor that its trigram pass found
 
-> **Executor instructions**: Follow this plan step by step. Run every
+> **Executor instructions.** Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report. Do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
->
-> **Drift check (run first)**: `zig/` is not tracked by git. Plans 002, 004,
+
+> **Drift check.** Git does not track `zig/` yet. Plans 002, 004,
 > and 005 changed the two files in scope, so a hash from planning time does
-> not apply. Compare the "Current state" excerpts with the live code. On a
-> mismatch, STOP.
+> not apply. Compare the "Current state" excerpts with the live code, and STOP on a
+> mismatch.
 
 ## Status
 
@@ -18,19 +18,22 @@
 - **Risk**: MED (the synthetic oracle test does not reach this path yet, see Step 4)
 - **Depends on**: plans/002-big-index-oracle-and-name-score-fix.md, plans/003-bench-app-real-search.md, plans/004-remove-search-cache.md
 - **Category**: perf
-- **Planned at**: commit `63a384c` (`zig/` is untracked), 2026-11-24
+- **Planned at**: commit `63a384c` (before git tracked `zig/`), 2026-11-24
 
 ## Why this matters
 
-A one-word fuzzy query of three or more letters first runs the "trigram
-tier": it scores only the names that contain every three-letter piece of the
+A one-word fuzzy query of three or more letters first runs the trigram tier.
+That pass scores only the names that contain every three-letter slice of the
 word. When that pass cannot prove its result complete, the code throws the
 result away and runs the full name scan from zero. The discarded result
 already holds `limit` real hits, so its lowest score is a valid lower bound
 (a "floor") for the final answer. Passing that floor to the full scan lets it
-skip most names. A prototype on a 2,076,700-entry index with a limit of 200
-measured `nan` at 367 µs (was 4,751 µs) and `nano` at 187 µs (was 2,435 µs),
-with results equal to the reference search. `con` and `rea` did not change.
+skip most names.
+
+In a prototype on a 2,076,700-entry index at limit 200, `nan` fell from
+4,751 µs to 367 µs. In the same run, `nano` fell from 2,435 µs to 187 µs.
+Both returned the same hits as the reference search. `con` and `rea` did not
+change.
 
 ## Current state
 
@@ -55,8 +58,8 @@ In `searchBase`, after plan 004:
 
 `tryTrigramTier` calls `top.compact()` before it returns. After that,
 `top.full` is true when `top` holds at least `limit` hits, and
-`top.floor_score` is the score of the hit at position `limit`. Each name is
-emitted once, and the scores use the same formula as the full scan.
+`top.floor_score` is the score of the hit at position `limit`. The pass emits
+each name once and uses the same score formula as the full scan.
 
 The end of `searchBase`, after plan 004:
 
@@ -119,7 +122,7 @@ Conventions: no comments in Zig sources. Each file stays within 600 lines.
 
 ## Git workflow
 
-- Do not commit, stage, or push. `zig/` is untracked.
+- Do not commit, stage, or push. Git does not track `zig/` yet.
 
 ## Steps
 
@@ -137,7 +140,7 @@ array:
         "mai kind:file",
 ```
 
-**Verify**: `mise exec -- zig build test -Dtest-filter="selective threshold"` → exit 0. The new queries pass before the change.
+**Verify**: `mise exec -- zig build test -Dtest-filter="selective threshold"` must exit 0. The new queries pass before the change.
 
 ### Step 2: Keep the floor in `searchBase`
 
@@ -171,32 +174,32 @@ In `zig/search_bitmap.zig`, add the parameter `floor_hint: i32,` after
         std.math.minInt(i32);
 ```
 
-**Verify**: `mise exec -- zig build test` → exit 0.
+**Verify**: `mise exec -- zig build test` must exit 0.
 
-**Verify**: `mise exec -- zig build lines` → `N files, all within 600 lines`.
+**Verify**: `mise exec -- zig build lines` must print `N files, all within 600 lines`.
 
 ### Step 4: Prove the test guards the floor
 
 Temporarily change `if (top.full) floor_hint = top.floor_score;` to
 `if (top.full) floor_hint = top.floor_score + 40;`.
 
-**Verify**: `mise exec -- zig build test -Dtest-filter="selective threshold"` → fails with at least one `oracle mismatch` line.
+**Verify**: `mise exec -- zig build test -Dtest-filter="selective threshold"` must fail with at least one `oracle mismatch` line.
 
 The plan author ran this check in a prototype on 2026-11-24. The test did
 NOT fail. The synthetic index does not reach the path where the trigram pass
-fills `limit` hits and then falls through. The floor was checked only against
-the real index: 32 queries at limits 50 and 200, 0 mismatches.
+fills `limit` hits and then falls through. We checked the floor against the
+real index on 32 queries at limits 50 and 200, with 0 mismatches.
 
 If the test does not fail for you either, add names to `buildBigListings`
 that make it fail before you accept the change. The path needs a fuzzy word
-of three or more letters where at least 200 names contain all its trigrams,
-and other names match it only as a scattered subsequence. If you cannot make
+of three or more letters. At least 200 names must contain all its trigrams,
+while other names match only as a subsequence. If you cannot make
 the test fail in two attempts, STOP. Restore Steps 2 and 3 to the original
 code and report that the floor has no test guard.
 
 Restore the line.
 
-**Verify**: `mise exec -- zig build test` → exit 0.
+**Verify**: `mise exec -- zig build test` must exit 0.
 
 ### Step 5: Measure
 

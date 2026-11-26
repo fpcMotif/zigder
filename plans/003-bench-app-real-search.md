@@ -1,12 +1,12 @@
 # Plan 003: The bench reports search the way the app runs it
 
-> **Executor instructions**: Follow this plan step by step. Run every
+> **Executor instructions.** Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report. Do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
->
-> **Drift check (run first)**: `zig/` is not tracked by git, so use a hash.
+
+> **Drift check.** Git does not track `zig/` yet, so use a hash.
 > Run `shasum -a 256 zig/bench.zig | cut -c1-12`. Expected: `0493295c3a5a`.
 > On a different value, compare the "Current state" excerpts with the live
 > code. On a mismatch, STOP.
@@ -18,17 +18,18 @@
 - **Risk**: LOW
 - **Depends on**: plans/001-restore-clean-build-config.md
 - **Category**: perf
-- **Planned at**: commit `63a384c` (`zig/` is untracked), 2026-11-24
+- **Planned at**: commit `63a384c` (before git tracked `zig/`), 2026-11-24
 
 ## Why this matters
 
 `zig build bench` measures ten one-word queries with a result limit of 50.
 The app's inline search uses a limit of 200 (`zig/app.zig:435`), and users
-type several words. The bench therefore reports 15 µs for `zigder` while the
-app pays 117 µs for the same query, and it does not show that `src main`
-takes 92 ms. Plans 004, 005, and 006 make those queries faster. This plan adds
-report-only rows so each of those plans can show a before and an after number.
-It adds no budget, so it cannot make the bench fail.
+type several words. The bench reports 15 µs for `zigder` while the app pays
+117 µs. It also hides that `src main` takes 92 ms.
+
+Plans 004, 005, and 006 make those queries faster. This plan adds report-only
+rows so each of those plans can show a before and an after number. It adds no
+budget, so it cannot make the bench fail.
 
 ## Current state
 
@@ -36,7 +37,7 @@ It adds no budget, so it cannot make the bench fail.
   and runs it against the real index of the machine at
   `~/Library/Caches/zigder/index.zidx`.
 
-The existing query table is printed here:
+This loop prints the existing query table:
 
 ```zig
 // zig/bench.zig:383-392
@@ -52,10 +53,9 @@ The existing query table is printed here:
     const sub_p50_us = @max(
 ```
 
-Names in scope at that point, all used earlier in the same function:
-`gpa`, `home`, `live_ref` (the live index), `z_res` (a reusable
-`search_mod.SearchResults`), `tester` (the offscreen UI), `measure`,
-`query_mod`, `search_mod`, `pOut`, and `restedFootprintMb`.
+These names are already in scope from earlier in the function: `gpa`, `home`,
+`live_ref`, `z_res`, `tester`, `measure`, `query_mod`, `search_mod`, `pOut`,
+and `restedFootprintMb`.
 
 The existing sampling pattern to copy:
 
@@ -71,7 +71,7 @@ The existing sampling pattern to copy:
         const z_stats = measure.Stats.of(&z_samples);
 ```
 
-The footprint helper is used like this: `const list_10k_mb = restedFootprintMb(&tester.renderer);` (`zig/bench.zig:293`).
+Call the footprint helper like this: `const list_10k_mb = restedFootprintMb(&tester.renderer);` (`zig/bench.zig:293`).
 
 Conventions: no comments in Zig sources. Each file stays within 600 lines.
 
@@ -115,7 +115,7 @@ existing behavior.
 
 ## Git workflow
 
-- Do not commit, stage, or push. `zig/` is untracked.
+- Do not commit, stage, or push. Git does not track `zig/` yet.
 
 ## Steps
 
@@ -169,16 +169,15 @@ loop and before `const sub_p50_us`:
     pOut(gpa, "after_search_mb={d:.2}\n", .{restedFootprintMb(&tester.renderer)});
 ```
 
-This block was written from the patterns in the file. It was not compiled by
-the plan author. If the compiler rejects a format specifier or a name, fix
+This block follows the patterns in the file. The plan author did not compile it. If the compiler rejects a format specifier or a name, fix
 only that token. If `search_mod.search` takes four arguments because plan 004
 already ran, drop the `null` argument.
 
-**Verify**: `mise exec -- zig build bench` → exit 0. The output contains the
+**Verify**: `mise exec -- zig build bench` must exit 0. The output contains the
 header `app query (limit 200)`, 13 rows below it, and a line that starts with
 `after_search_mb=`.
 
-**Verify**: `mise exec -- zig build lines` → `N files, all within 600 lines`.
+**Verify**: `mise exec -- zig build lines` must print `N files, all within 600 lines`.
 
 ### Step 3: Save the new baseline
 

@@ -1,12 +1,12 @@
 # Plan 002: Search is checked against an oracle on a large index, and scoped one-word search ranks by name again
 
-> **Executor instructions**: Follow this plan step by step. Run every
+> **Executor instructions.** Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report. Do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
->
-> **Drift check (run first)**: `zig/` is not tracked by git, so use hashes.
+
+> **Drift check.** Git does not track `zig/` yet, so use hashes.
 > Run `shasum -a 256 zig/search_bitmap.zig zig/tests.zig | cut -c1-12`.
 > Expected: `4cc7452265e1` and `f05497c1aaf2`. On a different value, compare
 > the "Current state" excerpts with the live code. On a mismatch, STOP.
@@ -18,7 +18,7 @@
 - **Risk**: LOW
 - **Depends on**: plans/001-restore-clean-build-config.md
 - **Category**: bug
-- **Planned at**: commit `63a384c` (`zig/` is untracked), 2026-11-24
+- **Planned at**: commit `63a384c` (before git tracked `zig/`), 2026-11-24
 
 ## Why this matters
 
@@ -26,7 +26,9 @@ The search engine has a slow, simple reference search (the "oracle") in the
 tests. The fast search must return the same entries with the same scores. The
 existing oracle test builds an index of about 75 entries. Three code paths in
 `zig/search_bitmap.zig` run only when more than 60,000 entries match, so no
-test reaches them. One of them has a ranking bug: a one-word search inside a
+test reaches them.
+
+One of them has a ranking bug: a one-word search inside a
 folder scope that matches most entries ranks the results without the name
 score. On the real 2,076,700-entry index, the query `in:~/devv/zigder e`
 returned 50 of 50 wrong results. This plan adds a test with an 88,800-entry
@@ -174,7 +176,7 @@ Conventions that apply:
 
 ## Git workflow
 
-- Do not commit, stage, or push. `zig/` is untracked and the operator decides
+- Do not commit, stage, or push. Git does not track `zig/` yet, and the operator decides
   when it enters git.
 
 ## Steps
@@ -398,7 +400,7 @@ test {
 ```
 
 **Verify (the test must fail first)**:
-`mise exec -- zig build test -Dtest-filter="selective threshold"` → exit code
+`mise exec -- zig build test -Dtest-filter="selective threshold"` must give an exit code
 not 0, with exactly these six lines and `expected 0, found 6`:
 
 ```text
@@ -410,7 +412,7 @@ oracle mismatch: query="in:/pack_007 kind:file e" limit=200 cache=false tier=2 o
 oracle mismatch: query="in:/pack_007 kind:file e" limit=200 cache=true tier=2 oracle_len=200 got_len=200
 ```
 
-This output was observed on the live tree on 2026-11-24. If other queries
+The live tree produced this output on 2026-11-24. If other queries
 mismatch, STOP and report the lines.
 
 ### Step 2: Add the name score to `scanEntriesDirect`
@@ -461,7 +463,7 @@ Change the call inside `if (pos.len <= 1 and neg.len == 0)` to:
 The first call (`scanEntriesDirect(gpa, live, q, lo, hi, now, null, top)`)
 stays as it is.
 
-**Verify**: `mise exec -- zig build test -Dtest-filter="selective threshold"` → exit 0.
+**Verify**: `mise exec -- zig build test -Dtest-filter="selective threshold"` must exit 0.
 
 ### Step 3: Sort the matched names only where the sort is used
 
@@ -485,9 +487,9 @@ sort inside that branch. The start of the `if (pos.len == 1)` block shown in "Cu
 
 The rest of the loop does not change. Close the braces as before.
 
-**Verify**: `mise exec -- zig build test` → exit 0.
+**Verify**: `mise exec -- zig build test` must exit 0.
 
-**Verify**: `mise exec -- zig build lines` → `N files, all within 600 lines`.
+**Verify**: `mise exec -- zig build lines` must print `N files, all within 600 lines`.
 
 ## Test plan
 
@@ -518,7 +520,7 @@ The rest of the loop does not change. Close the braces as before.
 ## Maintenance notes
 
 - Every later plan in this folder uses this test as its correctness gate. Add
-  a query to its list when a new search path is added.
+  a query to its list when you add a new search path.
 - The test builds its index in memory and takes a few seconds in Debug mode.
-- Measured in a prototype on the real index: `in:~/devv/zigder e` went from
-  50 of 50 wrong results at 23 ms to 0 wrong results at 5.6 ms.
+- In a prototype on the real index, `in:~/devv/zigder e` went from 50 wrong
+  results at 23 ms to 0 wrong results at 5.6 ms.

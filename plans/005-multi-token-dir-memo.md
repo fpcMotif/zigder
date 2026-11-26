@@ -1,16 +1,16 @@
 # Plan 005: Multi-word search scores folders once, not once per entry
 
-> **Executor instructions**: Follow this plan step by step. Run every
+> **Executor instructions.** Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report. Do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
->
-> **Drift check (run first)**: `zig/` is not tracked by git. Plans 002 and 004
+
+> **Drift check.** Git does not track `zig/` yet. Plans 002 and 004
 > changed `zig/search_bitmap.zig`, so a hash from planning time does not
-> apply. Compare the "Current state" excerpts with the live code. On a
-> mismatch, STOP. For `zig/search_nfa.zig` run
-> `shasum -a 256 zig/search_nfa.zig | cut -c1-12`. Expected: `e3d5824c56aa`.
+> apply. Compare the "Current state" excerpts with the live code, and STOP on a
+> mismatch. For `zig/search_nfa.zig` run
+> `shasum -a 256 zig/search_nfa.zig | cut -c1-12` and expect `e3d5824c56aa`.
 
 ## Status
 
@@ -19,7 +19,7 @@
 - **Risk**: MED
 - **Depends on**: plans/002-big-index-oracle-and-name-score-fix.md, plans/003-bench-app-real-search.md
 - **Category**: perf
-- **Planned at**: commit `63a384c` (`zig/` is untracked), 2026-11-24
+- **Planned at**: commit `63a384c` (before git tracked `zig/`), 2026-11-24
 
 ## Why this matters
 
@@ -47,7 +47,7 @@ prototype gave the same results as the reference search on 30 synthetic and
 
 ## Current state
 
-How a multi-word query is scored today. Each word is a "token". An entry
+Here is how the search scores a multi-word query today. Each word is a "token". An entry
 matches when every token matches its file name or the name of one of its
 ancestor folders. The reference scorer is `Query.matchPath` in
 `zig/query.zig`. Its score for a matching entry is:
@@ -119,17 +119,16 @@ Helpers this plan uses. All exist today:
 
 - `zig/search_bitmap.zig`: `pub const TopK`, `pub fn dirHasNeg(gpa, idx, dir, neg, neg_cache)`,
   and `inline fn zoneOk(z, q)` (not `pub` yet).
-- `zig/index_read.zig`: `Index.d` (folder count), `Index.u` (unique-name
-  count), `dirEntry()` (entry id of each folder), `dirParent()` (parent
-  folder of each folder), `entName()` (name id of each entry), `parent()`
-  (folder of each entry), `dirPrior()`, `nameEntsOff()`, `nameEnts()`,
-  `zones()`, `uname(id)`, `unameWide(id)`.
+- `zig/index_read.zig`: `Index.d` is the folder count and `Index.u` is the
+  unique-name count. The file also provides `dirEntry()`, `dirParent()`,
+  `entName()`, `parent()`, `dirPrior()`, `nameEntsOff()`, `nameEnts()`,
+  `zones()`, `uname(id)`, and `unameWide(id)`.
 - `zig/fuzzy_simd.zig`: `tokenScore(name, wide, mask, tok) ?i32`.
 - `zig/index_fmt.zig`: `nameMask(name)`, `ZONE`.
 
 Index invariant this plan relies on: `dirParent()[k] < k` for every folder
-`k >= 1`. Folder 0 is the root. This was checked on the real index
-(0 violations in 391,916 folders) and holds for the test index.
+`k >= 1`. Folder 0 is the root. A check on the real index found 0 violations
+across 391,916 folders, and the test index obeys the same rule.
 
 Conventions: no comments in Zig sources. Each file stays within 600 lines.
 `zig/search_nfa.zig` has 588 lines. Do not add lines to it.
@@ -158,7 +157,7 @@ Conventions: no comments in Zig sources. Each file stays within 600 lines.
 
 ## Git workflow
 
-- Do not commit, stage, or push. `zig/` is untracked.
+- Do not commit, stage, or push. Git does not track `zig/` yet.
 
 ## Steps
 
@@ -395,11 +394,11 @@ const search_memo = @import("search_memo.zig");
 
 The two files import each other. Zig allows this.
 
-**Verify**: `mise exec -- zig build test -Dtest-filter="oracle"` → exit 0, no `oracle mismatch` line.
+**Verify**: `mise exec -- zig build test -Dtest-filter="oracle"` must exit 0, no `oracle mismatch` line.
 
-**Verify**: `mise exec -- zig build test` → exit 0.
+**Verify**: `mise exec -- zig build test` must exit 0.
 
-**Verify**: `mise exec -- zig build lines` → `N files, all within 600 lines`.
+**Verify**: `mise exec -- zig build lines` must print `N files, all within 600 lines`.
 
 ### Step 3: Prove the test covers the new path
 
@@ -407,14 +406,14 @@ Temporarily change `sc += @divTrunc(@as(i32, b) * 3, 4);` to `sc += b;` in
 `zig/search_memo.zig`.
 
 **Verify**: `mise exec -- zig build test -Dtest-filter="selective threshold"`
-→ fails with `oracle mismatch` lines for multi-word queries such as
+must fail with `oracle mismatch` lines for multi-word queries such as
 `query="pack e"`, `query="pack src ma"`, and `query="src ma !util"`. The
 prototype printed `expected 0, found 32` with the cache loop present. Without
 that loop the count is lower.
 
 Restore the line.
 
-**Verify**: `mise exec -- zig build test` → exit 0.
+**Verify**: `mise exec -- zig build test` must exit 0.
 
 ### Step 4: Measure
 
@@ -440,7 +439,7 @@ your report.
 - [ ] `mise exec -- zig build test` exits 0
 - [ ] `mise exec -- zig build lines` exits 0
 - [ ] `mise exec -- zig build bench` exits 0 and the five multi-word rows are at most half of the baseline
-- [ ] `zig/search_memo.zig` contains `@divTrunc(@as(i32, b) * 3, 4)` (Step 3 was restored)
+- [ ] `zig/search_memo.zig` contains `@divTrunc(@as(i32, b) * 3, 4)` (Step 3 restored the original line)
 - [ ] Only `zig/search_memo.zig` and `zig/search_bitmap.zig` changed
 - [ ] `plans/README.md` status row updated
 
@@ -459,11 +458,11 @@ your report.
 
 - Extra memory per multi-word query: `d` bytes plus `2 * d * tokens` bytes for
   the memo, and `4 * u` bytes for the lookup. On the measured index (391,916
-  folders, 663,491 names, two tokens) this is about 4.6 MB. It is freed when
-  the query returns.
+  folders, 663,491 names, two tokens) this is about 4.6 MB. The query frees
+  it before returning.
 - If `Query.matchPath` changes how it scores a token that matches a folder,
   `Ctx.entry` must change with it. The oracle test catches a mismatch.
-- Entries added after the index was built live in the overlay. `search.zig`
+- Entries added after the index build live in the overlay. `search.zig`
   scores them with `matchPath` in `searchOverlay`. The memo does not see them
   as ancestors. This is the same as before this plan.
 - Deferred: `ext:` with several words still uses the per-entry path match. It

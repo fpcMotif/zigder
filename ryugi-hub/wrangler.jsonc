@@ -1,0 +1,19 @@
+{
+  "name": "ryugi-hub",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ryugi-hub-db",
+      "database_id": "8e024120-8524-48c2-b2a5-3a20a9bd9b75"
+    }
+  ]
+}

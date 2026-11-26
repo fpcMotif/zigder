@@ -1,0 +1,203 @@
+<doc ryugi-attribution="eyJtb2RpZmllZEJ5IjoiQW50aWdyYXZpdHkiLCJkaWdlc3QiOiI5MDEyMDlmZjk3NTViOGYzZjljZDhmNjE0Yzg4MGFjMTBhODY1YzI4MGI4ZTU0NTQ5NTJkMjAwODZhMTk1MjhmIn0">
+  <h1 id="kUnGCyQR">Zigder Performance, Safety &amp; Unslop Report</h1>
+  <alert id="HrZnY1CT" type="tip">
+    <p><b>At a glance.</b> Over-allocated icon atlases, unpruned postings, and unchecked index headers broke memory budgets and risked crashes. Lazy <code>512x512</code> GPU atlases, cost-based hybrid joins, and cancelable bounds-checked walkers cut latency up to <b>15.1x</b>. Exact brute-force search parity, the <code>.zidx</code> disk format, and all 13 UI state machines remain unchanged.</p>
+  </alert>
+  <p id="vpvG8CBZ">Companion artifacts include <ref document="zigder-codebase-overview" to="VgY88M45FsgaA2HiduKoE">Zigder Codebase Overview</ref> and <ref whiteboard="zigder-architecture" to="jvkngvYcbzLkM0fHIrocp">Zigder Architecture Whiteboard</ref>.</p>
+  <h2 id="n6OZnGzC">1. Memory Footprint &amp; Budget Recovery</h2>
+  <p id="jBW9RD1L">Commit <code>363428d0</code> defaulted <code>Images.side</code> to <code>2048</code> (<code>16 MB</code>) and left <code>Tester.text.images.sink</code> unset. Rendering two <code>32x32</code> file icons allocated a <code>16 MB</code> CPU buffer plus a <code>16 MB</code> Metal texture. Starting the atlas at <code>512x512</code> (<code>1 MB</code>) with direct GPU <code>Sink</code> uploads in <code>src/ui/gpu_rest.zig</code> removed that waste. Trimming idle BGRA caches, freeing inactive <code>ColumnPane</code>s, and capping NFA worker shards passed all nine budgets.</p>
+  <chart id="r1qWzPmI"><![CDATA[{
+    "version": 1,
+    "type": "bar",
+    "title": "Physical Footprint Across 5 Interleaved Runs (Median MB, Lower is Better)",
+    "subtitle": "Apple M4 Pro (12 cores) · 2,331,122 indexed entries · 0 leaks",
+    "x": "stage",
+    "series": [
+      { "key": "before", "label": "Before (MB)" },
+      { "key": "after", "label": "After (MB)" }
+    ],
+    "highlight": "after",
+    "data": [
+      { "stage": "Idle Window", "before": 56.28, "after": 40.92 },
+      { "stage": "10k Folder + Views", "before": 59.55, "after": 47.25 },
+      { "stage": "Post-Search", "before": 102.00, "after": 68.24 }
+    ],
+    "refs": [
+      { "y": 45, "label": "Idle budget (45 MB)" },
+      { "y": 50, "label": "10k list budget (50 MB)" }
+    ],
+    "format": { "unit": " MB", "decimals": 2 },
+    "source": "5 interleaved A/B runs of zigder-bench"
+  }]]></chart>
+  <h2 id="auk3POwc">2. Search Pipeline Acceleration</h2>
+  <p id="V8giYzGP">Every search fast path preserves exact <code>Query.matchPath</code> scores and passes <code>bruteForceSearch</code> oracle checks in Debug and ReleaseFast.</p>
+  <mermaid id="Nv3LGxrW">flowchart LR
+    Q[Parsed Query] --&gt;|1 tok &gt;= 3 chars| T1[Trigram + cheapNameBound]
+    Q --&gt;|scope &lt;= 16,384| SC[Scoped Zone Scan]
+    Q --&gt;|pos &lt;= 1 global| S1[Sorted max_tot Pass]
+    Q --&gt;|multi-token| NFA[16B/32B NEON NFA]
+    NFA --&gt; DM[Scoped DirMemo]
+    DM --&gt; HJ[Cost-Based Hybrid Join]
+    T1 --&gt; TK[Early-Floor TopK]
+    SC --&gt; TK
+    S1 --&gt; TK
+    HJ --&gt; TK</mermaid>
+  <chart id="BOz7OVII"><![CDATA[{
+    "version": 1,
+    "type": "bar",
+    "title": "Real-App Search Latency at Limit 200 (Median p50 µs, Lower is Better)",
+    "subtitle": "Speedups: con 15.1x · zigder e 7.9x · ext:json 3.4x · devv src main 2.0x · config json 1.7x",
+    "x": "query",
+    "series": [
+      { "key": "before", "label": "Before (µs)" },
+      { "key": "after", "label": "After (µs)" }
+    ],
+    "highlight": "after",
+    "data": [
+      { "query": "con", "before": 2200.6, "after": 145.3 },
+      { "query": "zigder e", "before": 6398.3, "after": 806.4 },
+      { "query": "ext:json", "before": 2290.3, "after": 672.0 },
+      { "query": "devv src main", "before": 7479.8, "after": 3659.2 },
+      { "query": "config json", "before": 4252.2, "after": 2471.1 },
+      { "query": "src main", "before": 9491.0, "after": 6321.3 },
+      { "query": "test spec ts", "before": 16744.6, "after": 11942.3 }
+    ],
+    "format": { "unit": " µs", "compact": true },
+    "source": "zigder-bench app_queries across 2.33M entries (limit=200)"
+  }]]></chart>
+  <steps id="1vhme2v7">
+    <step id="s_l5femr23" title="Tight per-name upper bound in the trigram tier">
+      <p><code>TopK.push</code> activates <code>floor_score</code> at <code>k</code> items instead of <code>2 * k</code>. <code>tryTrigramTier</code> drops the <code>+100</code> head bonus when <code>ni.head != tok.text[0]</code>, cutting <code>con</code> to <code>145.3 µs</code>.</p>
+    </step>
+    <step id="s_if3xun4y" title="Direct zone scan for small folder scopes">
+      <p>Scopes up to <code>16,384</code> entries run <code>searchSmallScopeSingle</code> directly instead of waking six worker threads across <code>714k</code> names. Query <code>in:~/devv/zigder e</code> drops from <code>6398.3 µs</code> to <code>806.4 µs</code>.</p>
+    </step>
+    <step id="s_7xfwtp03" title="Cost-based hybrid multi-token join &amp; 16B/32B NEON SIMD">
+      <p><code>buildDirMemo</code> scopes propagation, reuses <code>Searcher.Scratch</code> buffers, and picks the smaller side via sum-over-supersets DP. Paired 16-byte and 32-byte NEON masks in <code>src/search/fuzzy_simd.zig</code> accelerate short filename scans.</p>
+    </step>
+  </steps>
+  <details id="_jUwQ9TO" summary="Cost-Based Per-Mask Hybrid Join (src/search/memo.zig)" open="false">
+    <codeblock lang="zig">var dir_superset = dir_mask_entries;
+for (0..npos) |bit| {
+    const step = @as(usize, 1) &lt;&lt; @intCast(bit);
+    for (0..state_count) |mask| {
+        if ((mask &amp; step) == 0) dir_superset[mask] += dir_superset[mask | step];
+    }
+}
+
+for (1..state_count) |b| {
+    if (mask_entries[b] == 0) continue;
+    const req = @as(usize, all) &amp; ~b;
+    if (req != 0 and dir_superset[req] &lt; mask_entries[b]) {
+        use_dir[b] = true;
+        any_dir = true;
+        for (1..state_count) |db| {
+            if ((db &amp; req) == req) dir_trigger[db] = true;
+        }
+    }
+}</codeblock>
+  </details>
+  <h2 id="TkCYm0aU">3. Safety Hardening &amp; Red-Green Regression Tests</h2>
+  <p id="2ZQtZFoR">Each hazard reproduced first as a red test in <code>src/tests/engine.zig</code> or <code>src/tests/fileops.zig</code> before its fix landed.</p>
+  <table id="I9dmKdQ5">
+    <tr>
+      <th>
+        <p>Hazard</p>
+      </th>
+      <th>
+        <p>Red Failure Before Fix</p>
+      </th>
+      <th>
+        <p>Fix &amp; Invariant Enforced</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p>Corrupt <code>.zidx</code> / <code>FSIDX012</code> mmap</p>
+      </td>
+      <td>
+        <p><code>@intCast</code> panicked with <code>SIGABRT</code> in Debug, while inverted <code>name_off</code> tables crashed <code>uname()</code>.</p>
+      </td>
+      <td>
+        <p>Checked <code>mulIndex</code> and <code>addIndex</code> math, range-checked headers, and validated monotonic offset tables in <code>src/index/read.zig</code>.</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>H1</code> / <code>E2</code> / <code>E3</code> walker cancel &amp; fd leaks</p>
+      </td>
+      <td>
+        <p><code>Engine.stop()</code> blocked <code>5.5 s</code> on <code>/System/Library</code> and leaked <code>DirFd</code> handles under <code>pushWork</code> OOM.</p>
+      </td>
+      <td>
+        <p>Wired <code>walk.scanCancel</code> to <code>Engine.stopping</code>, drained queued items via <code>freeWorkItem</code>, and skipped canceled index writes.</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>moveToExactPath</code> destructive fallback</p>
+      </td>
+      <td>
+        <p><code>EACCES</code> on a <code>0555</code> parent ran <code>copyToExactPath</code> plus <code>deleteImmediately</code>, deleting readable children in the source folder.</p>
+      </td>
+      <td>
+        <p>Rejected subtree self-moves, handled APFS case-only renames on <code>EEXIST</code>, and restricted copy-plus-delete strictly to <code>EXDEV</code>.</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p>Entry-name traversal &amp; race</p>
+      </td>
+      <td>
+        <p>Empty names created <code>sub/ 2</code>, <code>../escaped</code> escaped the parent directory, and NUL bytes truncated C paths.</p>
+      </td>
+      <td>
+        <p><code>isValidEntryName</code> blocks empty, dot, slash, and NUL names in <code>src/fs/ops.zig</code>. <code>src/measure.zig</code> packs Mach timebase atomically.</p>
+      </td>
+    </tr>
+  </table>
+  <h2 id="xr7dFmIE">4. Unslop &amp; Verification Summary</h2>
+  <ul id="8KTtfs-M">
+    <li>Extracted TCC path policy into <code>src/index/tcc.zig</code> so all <code>57</code> Zig files stay under <code>600</code> lines.</li>
+    <li>Deduplicated <code>writeFd</code>, <code>ensureParentDir</code>, <code>trimTrailingSlash</code>, and <code>freePaths</code> across <code>accel.zig</code>, <code>read.zig</code>, <code>cli.zig</code>, <code>bench.zig</code>, and <code>ops.zig</code>.</li>
+    <li>Replaced <code>system(&quot;rm -rf ...&quot;)</code> shell calls in <code>src/bench.zig</code> and removed six <code>asConstSlices</code> heap copies in <code>src/app/</code>.</li>
+  </ul>
+  <table id="NCanZXce">
+    <tr>
+      <th>
+        <p>Verification Command</p>
+      </th>
+      <th>
+        <p>Measured Outcome</p>
+      </th>
+    </tr>
+    <tr>
+      <td>
+        <p><code>mise exec -- zig build check</code></p>
+      </td>
+      <td>
+        <p>Pass (<code>57</code> files within <code>600</code> lines, all Debug and ReleaseFast tests green)</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>mise exec -- zig build bench</code> (5 interleaved A/B runs)</p>
+      </td>
+      <td>
+        <p>Pass (<code>9/9</code> budgets <code>ok: true</code> on all 5 runs, <code>leaks = 0</code>, <code>0</code> oracle mismatches)</p>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <p><code>mise exec -- zig build</code> &amp; <code>codesign --verify --strict</code></p>
+      </td>
+      <td>
+        <p>Pass (<code>zig-out/zigder.app</code> and <code>zig-out/bin/zigder-cli</code> verified)</p>
+      </td>
+    </tr>
+  </table>
+  <h2 id="p9Xk3LmQ">5. Next Iteration Feedback</h2>
+  <p id="q7Wn2BvR">Choose the next follow-up area to prioritize: <ask id="next-perf-track" recommend="async-inline-search"><option value="async-inline-search">Move multi-token inline search off the UI thread</option><option value="live-compact">Compact Live overlay mutations back to .zidx on idle (H4)</option><option value="quicklook-sync">Refresh visible Quick Look target on selection change (H5)</option></ask></p>
+  <p id="m4Tz8KpL">Leave an inline note or follow-up request: <ask id="review-notes" placeholder="Add review feedback or benchmark scenarios to test next" /></p>
+</doc>
+

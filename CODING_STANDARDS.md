@@ -1,6 +1,6 @@
-# Coding Standards
+# Coding standards
 
-- **Sibling sweep**: When a fix addresses a lifetime, state-transition, or interaction bug in one `zig/view_*.zig` file, audit all sibling `zig/view_*.zig` files (`view_list`, `view_icon`, `view_gallery`, `view_column`, `view_chrome`, `view_overlays`, `view_inspector`) for the same pattern before approving.
-- **Boundary testing**: Trigger UI regression tests in `zig/tests_ui.zig` through `ui.Tester` clicks, double-clicks, and keys rather than calling `AppState` methods directly between frames.
-- **Deferred render-loop mutations**: Record user-triggered listing, tab, or path mutations inside render loops (`while` and `for` loops) and apply them after the loop finishes. `mise exec -- zig build view-loops` checks `while (...next())` loops automatically; inspect `for` loops and slice borrows during review.
-- **Release parity**: Confirm both Debug and ReleaseFast test suites pass via `mise exec -- zig build check` before delivering `zig-out/zigder.app`.
+- **Sibling views.** When you fix a state or input bug in one `src/ui/*.zig` view, check all other views in `src/ui/` for the same pattern.
+- **UI tests.** Drive regression tests in `src/tests/ui.zig` with `ui.Tester` clicks, double-clicks, and keys. Do not call `AppState` methods directly between frames.
+- **Read-only render pass.** View functions in `src/ui/` take `*const AppState` and push `commands.Command` values into `commands.Queue`. `src/ui/view.zig` flushes the queue once after rendering.
+- **Release checks.** Run `mise exec -- zig build check` so both Debug and ReleaseFast tests pass before delivering `zig-out/zigder.app`.

@@ -1,6 +1,6 @@
 # NativeGPUI
 
-Real AppKit controls, window chrome, sidebars, menus and macOS 26 liquid glass inside a GPUI window. GPUI owns layout; macOS owns the pixels.
+Real AppKit controls, window chrome, sidebars, menus and macOS 26 liquid glass inside a GPUI window. GPUI does the layout and macOS draws the pixels.
 
 macOS 26 or later, Apple silicon, Rust 1.97 or later. MIT licensed.
 
@@ -31,7 +31,7 @@ fn main() {
 }
 ```
 
-Run an example with `cargo run --release --example sidebar`. `custom_glass` and `glass_variants` also need `--features private-api` (undocumented material values and private AppKit selectors, off by default).
+Run an example with `cargo run --release --example sidebar`. `custom_glass` and `glass_variants` also need `--features private-api`, which enables undocumented material values and private AppKit selectors.
 
 To depend on it, use the same GPUI revision the framework builds against, and take `gpui_macos` from this repository:
 
@@ -45,7 +45,7 @@ gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "90d85140
 gpui_macos = { git = "https://github.com/Cafekery/NativeGPUI" }
 ```
 
-`crates/gpui-macos` is zed's `gpui_macos` at that revision plus seven patches, under Apache-2.0.
+`crates/gpui-macos` holds zed's `gpui_macos` at that revision plus seven patches, under Apache-2.0.
 
 <div align="center">
 
@@ -62,7 +62,7 @@ The Finder, rebuilt on NativeGPUI.
 
 </div>
 
-The app is not notarized. Move it to Applications first (from Downloads the default file browser item stays disabled), open it, click Done, then click Open Anyway in System Settings → Privacy & Security.
+The app is not notarized. Move it to Applications first, because the default file browser item stays disabled when the app runs from Downloads. Open it, click Done, then click Open Anyway in System Settings under Privacy & Security.
 
 ### Build from source
 
@@ -77,11 +77,11 @@ This makes `dist/Found'er.app`. `cargo run --release -p founder` also works, but
 
 ### First launch
 
-macOS asks before Found'er touches Desktop, Documents, Downloads, external disks or iCloud Drive; it works without the ones you refuse. It indexes file names on your startup disk in the background, about 700–800 MB in `~/Library/Application Support/Founder/fsearch`.
+macOS asks before Found'er touches Desktop, Documents, Downloads, external disks or iCloud Drive. It works without the ones you refuse. It indexes file names on your startup disk in the background, about 700 to 800 MB in `~/Library/Application Support/Founder/fsearch`.
 
 ### Default file browser
 
-Found'er menu → Use Found'er as Default File Browser makes Show in Finder open Found'er. It adds a login item, `viewer-guard` (shown as "sh"), that restores your old viewer if Found'er is deleted. Uncheck the item to undo it, or run this by hand, only if `defaults read -g NSFileViewer` prints `dev.cafekery.founder`:
+In the Found'er menu, Use Found'er as Default File Browser makes Show in Finder open Found'er. It adds a login item, `viewer-guard`, which Login Items shows as "sh". If you delete Found'er, `viewer-guard` restores your previous viewer. Uncheck the menu item to undo this, or run these commands if `defaults read -g NSFileViewer` prints `dev.cafekery.founder`:
 
 ```sh
 defaults delete -g NSFileViewer
@@ -112,4 +112,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) to build and send changes, and [SECURITY.
 
 ## License
 
-MIT; see [LICENSE](LICENSE). fsearch ([founder/crates/fsearch/LICENSE](founder/crates/fsearch/LICENSE)) is by Noah Dunnagan, also MIT. `crates/gpui-macos` is Apache-2.0. Not affiliated with or endorsed by Apple.
+MIT. See [LICENSE](LICENSE). fsearch ([founder/crates/fsearch/LICENSE](founder/crates/fsearch/LICENSE)) is by Noah Dunnagan, also MIT. `crates/gpui-macos` is Apache-2.0. Not affiliated with or endorsed by Apple.
